@@ -48,36 +48,42 @@ function formatarData(data) {
   return `${ano}-${mes}-${dia}`;
 }
 
+// 🔥 NORMALIZAR TEXTO
+function normalizarTexto(txt) {
+  return (txt || "").trim();
+}
+
 function carregarTimeline() {
   fetch(API_URL)
     .then(res => res.json())
     .then(data => {
 
-      const items = data.map(e => ({
+      // 🔥 FILTRA E NORMALIZA DADOS
+      const dadosValidos = data.filter(e => {
+        const dataValida = new Date(e.inicio);
+        return e.inicio && !isNaN(dataValida);
+      });
+
+      const items = dadosValidos.map(e => ({
         id: Number(e.id),
         content: e.titulo,
         start: e.inicio,
         end: e.fim || null,
-        group: e.categoria
+        group: normalizarTexto(e.categoria)
       }));
 
-      const gruposUnicos = [...new Set(data.map(e => e.categoria))];
+      // 🔥 GRUPOS NORMALIZADOS
+      const gruposUnicos = [...new Set(dadosValidos.map(e => normalizarTexto(e.categoria)))];
 
       const groups = gruposUnicos.map(cat => ({
         id: cat,
         content: cat
       }));
 
-      // 🔥 FILTRAR DATAS VÁLIDAS
-      const datasInicio = items
-        .map(i => new Date(i.start))
-        .filter(d => !isNaN(d));
+      // 🔥 RANGE SEGURO
+      const datasInicio = items.map(i => new Date(i.start)).filter(d => !isNaN(d));
+      const datasFim = items.map(i => new Date(i.end || i.start)).filter(d => !isNaN(d));
 
-      const datasFim = items
-        .map(i => new Date(i.end || i.start))
-        .filter(d => !isNaN(d));
-
-      // 🔥 FALLBACK SE DER PROBLEMA
       const dataMin = datasInicio.length ? new Date(Math.min(...datasInicio)) : new Date();
       const dataMax = datasFim.length ? new Date(Math.max(...datasFim)) : new Date();
 
@@ -123,7 +129,7 @@ function carregarTimeline() {
 
           document.getElementById("editId").value = evento.id;
           document.getElementById("titulo").value = evento.titulo;
-          document.getElementById("categoria").value = evento.categoria;
+          document.getElementById("categoria").value = normalizarTexto(evento.categoria);
 
           document.getElementById("inicio").value = formatarData(evento.inicio);
           document.getElementById("fim").value = formatarData(evento.fim);
@@ -137,46 +143,63 @@ function carregarTimeline() {
 carregarTimeline();
 
 
+// 🔥 GERAR ID SEQUENCIAL
+function gerarNovoId(data) {
+  const ids = data.map(e => Number(e.id)).filter(n => !isNaN(n));
+  return ids.length ? Math.max(...ids) + 1 : 1;
+}
+
+
 // 🔥 CREATE + UPDATE
 document.getElementById("formEvento").addEventListener("submit", function(e) {
   e.preventDefault();
 
   const id = document.getElementById("editId").value;
 
-  const evento = {
-    titulo: document.getElementById("titulo").value,
-    inicio: document.getElementById("inicio").value,
-    fim: document.getElementById("fim").value || "",
-    categoria: document.getElementById("categoria").value
-  };
+  fetch(API_URL)
+    .then(res => res.json())
+    .then(data => {
 
-  if (id) {
-    fetch(`${API_URL}/id/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: evento })
-    })
-    .then(() => {
-      limparForm();
-      carregarTimeline();
-    });
+      const evento = {
+        titulo: document.getElementById("titulo").value,
+        inicio: document.getElementById("inicio").value,
+        fim: document.getElementById("fim").value || "",
+        categoria: normalizarTexto(document.getElementById("categoria").value)
+      };
 
-  } else {
-    fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        data: [{
-          id: Date.now(),
-          ...evento
-        }]
-      })
-    })
-    .then(() => {
-      limparForm();
-      carregarTimeline();
+      if (id) {
+        // 🔹 UPDATE
+        fetch(`${API_URL}/id/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: evento })
+        })
+        .then(() => {
+          limparForm();
+          carregarTimeline();
+        });
+
+      } else {
+        // 🔹 CREATE COM ID SEQUENCIAL
+        const novoId = gerarNovoId(data);
+
+        fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            data: [{
+              id: novoId,
+              ...evento
+            }]
+          })
+        })
+        .then(() => {
+          limparForm();
+          carregarTimeline();
+        });
+      }
+
     });
-  }
 });
 
 function limparForm() {
