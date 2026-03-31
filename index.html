@@ -15,37 +15,33 @@
       margin-top: 20px;
     }
 
-    button { padding: 6px 10px; margin: 5px; }
-
     #modal {
       display: none;
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top:0;left:0;width:100%;height:100%;
       background: rgba(0,0,0,0.5);
     }
 
     #modalContent {
-      background: white;
-      padding: 20px;
-      width: 320px;
-      margin: 80px auto;
-      border-radius: 8px;
-      position: relative;
+      background:white;
+      padding:20px;
+      width:320px;
+      margin:80px auto;
+      border-radius:8px;
+      position:relative;
     }
 
     #closeBtn {
-      position: absolute;
-      top: 5px;
-      right: 10px;
-      cursor: pointer;
-      font-weight: bold;
+      position:absolute;
+      top:5px;
+      right:10px;
+      cursor:pointer;
     }
 
     input, textarea {
-      width: 100%;
-      margin: 5px 0;
-      padding: 5px;
+      width:100%;
+      margin:5px 0;
+      padding:5px;
     }
   </style>
 </head>
@@ -53,45 +49,58 @@
 <body>
 
 <h2>Minha Timeline</h2>
-
 <button onclick="abrirModalCriar()">Add Event</button>
 
 <div id="timeline"></div>
 
-<!-- MODAL -->
 <div id="modal">
   <div id="modalContent">
     <span id="closeBtn" onclick="fecharModal()">X</span>
 
-    <h3 id="modalTitle">Editar</h3>
+    <h3 id="modalTitle"></h3>
 
     <input type="hidden" id="editId">
-    <input type="text" id="titulo" placeholder="Nome do evento">
-    <input type="date" id="inicio">
-    <input type="date" id="fim">
-    <input type="text" id="categoria">
 
-    <label>Cor:</label>
-    <input type="color" id="cor">
+    <!-- EVENTO -->
+    <div id="camposEvento">
+      <input id="titulo" placeholder="Nome do evento">
+      <input type="date" id="inicio">
+      <input type="date" id="fim">
+      <textarea id="notas" maxlength="500"></textarea>
+    </div>
 
-    <textarea id="notas" maxlength="500"></textarea>
+    <!-- CATEGORIA -->
+    <div id="camposCategoria">
+      <input id="categoria">
+      <input type="color" id="cor">
+    </div>
 
     <div id="botoes"></div>
   </div>
 </div>
 
 <script>
-const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
+const API_URL="https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 
-// ===== UTIL =====
-function normalizar(txt){ return (txt||"").trim(); }
-function gerarCor(){ return '#' + Math.floor(Math.random()*16777215).toString(16); }
+function normalizar(t){return (t||"").trim();}
 
-// ===== MODAL =====
+// ===== CONTROLE VISUAL =====
+function modoEvento(){
+  camposEvento.style.display="block";
+  camposCategoria.style.display="block";
+}
+
+function modoCategoria(){
+  camposEvento.style.display="none";
+  camposCategoria.style.display="block";
+}
+
+// ===== MODAIS =====
 function abrirModalCriar(){
   modal.style.display="block";
   modalTitle.innerText="Novo Evento";
+  modoEvento();
   limparForm();
 
   botoes.innerHTML=`<button onclick="salvarEvento()">Salvar</button>`;
@@ -100,13 +109,14 @@ function abrirModalCriar(){
 function abrirModalEditarEvento(e){
   modal.style.display="block";
   modalTitle.innerText="Editar Evento";
+  modoEvento();
 
   editId.value=e.id;
   titulo.value=e.titulo;
   inicio.value=e.inicio;
   fim.value=e.fim;
-  categoria.value=e.categoria;
   notas.value=e.notas||"";
+  categoria.value=e.categoria;
   cor.value=e.cor||"#cccccc";
 
   botoes.innerHTML=`
@@ -115,19 +125,14 @@ function abrirModalEditarEvento(e){
   `;
 }
 
-// 🔥 NOVO MODAL CATEGORIA
 function abrirModalCategoria(cat, corAtual){
   modal.style.display="block";
   modalTitle.innerText="Editar Categoria";
 
-  editId.value=""; // não é evento
-  titulo.value="";
-  inicio.value="";
-  fim.value="";
-  notas.value="";
+  modoCategoria();
 
   categoria.value=cat;
-  cor.value=corAtual || "#cccccc";
+  cor.value=corAtual||"#cccccc";
 
   botoes.innerHTML=`
     <button onclick="atualizarCategoria('${cat}')">Atualizar</button>
@@ -136,63 +141,68 @@ function abrirModalCategoria(cat, corAtual){
 
 function fecharModal(){ modal.style.display="none"; }
 
+// ===== CORES CORRETAS =====
+function obterMapaCores(data){
+  const mapa={};
+
+  data.forEach(e=>{
+    const cat=normalizar(e.categoria);
+    if(!mapa[cat] && e.cor){
+      mapa[cat]=e.cor;
+    }
+  });
+
+  return mapa;
+}
+
 // ===== TIMELINE =====
 function carregarTimeline(){
   fetch(API_URL)
   .then(r=>r.json())
   .then(data=>{
 
-    const mapa={};
-    data.forEach(e=>{
-      const cat=normalizar(e.categoria);
-      if(!mapa[cat]) mapa[cat]=e.cor||gerarCor();
-    });
+    const mapa=obterMapaCores(data);
 
     const items=data.map(e=>{
       const cat=normalizar(e.categoria);
+      const corItem = e.cor || mapa[cat] || "#999";
+
       return{
         id:Number(e.id),
         content:"",
         start:e.inicio,
         end:e.fim||null,
         group:cat,
-        subgroup:e.id,
-        style:`background:${mapa[cat]};border-color:${mapa[cat]}`
+        style:`background:${corItem};border-color:${corItem}`
       };
     });
 
     const groups=[...new Set(data.map(e=>normalizar(e.categoria)))]
-      .map(cat=>({
-        id:cat,
-        content:cat
-      }));
+      .map(cat=>({id:cat,content:cat}));
 
     if(timeline) timeline.destroy();
 
     timeline=new vis.Timeline(
-      document.getElementById('timeline'),
+      document.getElementById("timeline"),
       items,
       groups,
       {
         orientation:'top',
-        stack:true,
-        stackSubgroups:true
+        stack:true
       }
     );
 
-    // 🔥 CLICK EVENTO
-    timeline.on('select', props=>{
+    timeline.on('select',props=>{
       if(props.items.length){
         const ev=data.find(e=>Number(e.id)===props.items[0]);
         abrirModalEditarEvento(ev);
       }
     });
 
-    // 🔥 CLICK CATEGORIA
-    timeline.on('click', function (props) {
-      if (props.what === 'group-label') {
-        const cat = props.group;
-        const corAtual = mapa[cat];
+    timeline.on('click',props=>{
+      if(props.what==="group-label"){
+        const cat=props.group;
+        const corAtual = mapa[cat] || "#cccccc";
         abrirModalCategoria(cat, corAtual);
       }
     });
@@ -200,7 +210,7 @@ function carregarTimeline(){
   });
 }
 
-// ===== CRUD EVENTO =====
+// ===== CRUD =====
 function gerarNovoId(data){
   return Math.max(...data.map(e=>Number(e.id)))+1;
 }
@@ -247,35 +257,32 @@ function deletarEvento(){
   .then(()=>{fecharModal();carregarTimeline();});
 }
 
-// ===== 🔥 ATUALIZAR CATEGORIA =====
+// 🔥 CORRIGIDO (só altera a categoria correta)
 function atualizarCategoria(catAntiga){
   fetch(API_URL)
   .then(r=>r.json())
   .then(data=>{
 
-    const novaCat = categoria.value;
-    const novaCor = cor.value;
+    const novaCat=categoria.value;
+    const novaCor=cor.value;
 
-    const updates = data
-      .filter(e => normalizar(e.categoria) === normalizar(catAntiga))
-      .map(e => {
-        return fetch(`${API_URL}/id/${e.id}`, {
-          method: "PUT",
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({
-            data: {
-              categoria: novaCat,
-              cor: novaCor
-            }
-          })
-        });
-      });
+    const updates=data
+      .filter(e=>normalizar(e.categoria)===normalizar(catAntiga))
+      .map(e=>fetch(`${API_URL}/id/${e.id}`,{
+        method:"PUT",
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          data:{
+            categoria:novaCat,
+            cor:novaCor
+          }
+        })
+      }));
 
     Promise.all(updates).then(()=>{
       fecharModal();
       carregarTimeline();
     });
-
   });
 }
 
@@ -290,7 +297,6 @@ function limparForm(){
   cor.value="#cccccc";
 }
 
-// INIT
 carregarTimeline();
 </script>
 
