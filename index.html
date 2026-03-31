@@ -8,8 +8,24 @@
 
   <style>
     body { font-family: Arial; margin: 20px; }
-    #timeline { height: 500px; border: 1px solid #ccc; margin-top: 20px; }
-    input, button { margin: 5px; padding: 5px; }
+
+    #timeline {
+      height: 500px;
+      border: 1px solid #ccc;
+      margin-top: 20px;
+    }
+
+    input, button {
+      margin: 5px;
+      padding: 5px;
+    }
+
+    #formContainer {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
   </style>
 </head>
 
@@ -17,14 +33,18 @@
 
 <h2>Minha Timeline</h2>
 
-<form id="formEvento">
-  <input type="hidden" id="editId">
-  <input type="text" id="titulo" placeholder="Nome do evento" required>
-  <input type="date" id="inicio" required>
-  <input type="date" id="fim">
-  <input type="text" id="categoria" placeholder="Categoria" required>
-  <button type="submit">Salvar</button>
-</form>
+<button onclick="toggleForm()">Add Event</button>
+
+<div id="formContainer">
+  <form id="formEvento">
+    <input type="hidden" id="editId">
+    <input type="text" id="titulo" placeholder="Nome do evento" required>
+    <input type="date" id="inicio" required>
+    <input type="date" id="fim">
+    <input type="text" id="categoria" placeholder="Categoria" required>
+    <button type="submit">Salvar</button>
+  </form>
+</div>
 
 <div id="timeline"></div>
 
@@ -34,21 +54,25 @@ const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 let container = document.getElementById('timeline');
 
-// FORMATAR DATA (input)
+// 🔥 TOGGLE FORM
+function toggleForm() {
+  const form = document.getElementById("formContainer");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+// FORMATAR DATA INPUT
 function formatarData(data) {
   if (!data) return "";
   const d = new Date(data);
   if (isNaN(d)) return "";
-
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// FORMATAR DATA (exibição)
+// FORMATAR DATA EXIBIÇÃO
 function formatarDataBR(data) {
   if (!data) return "—";
   const d = new Date(data);
   if (isNaN(d)) return "—";
-
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
@@ -61,8 +85,6 @@ function normalizarTexto(txt) {
 function calcularDuracao(inicio, fim) {
   const start = new Date(inicio);
   const end = fim ? new Date(fim) : new Date(inicio);
-
-  if (isNaN(start) || isNaN(end)) return "";
 
   let anos = end.getFullYear() - start.getFullYear();
   let meses = end.getMonth() - start.getMonth();
@@ -94,13 +116,15 @@ function carregarTimeline() {
 
         return {
           id: Number(e.id),
-          content: e.titulo,
+
+          // 🔥 SEM TEXTO NA BARRA
+          content: "",
+
           start: e.inicio,
           end: e.fim || null,
           group: normalizarTexto(e.categoria),
           subgroup: e.id,
 
-          // 🔥 TOOLTIP COMPLETO
           title: `
 <strong>${e.titulo}</strong><br>
 Início: ${inicioBR}<br>
@@ -117,8 +141,8 @@ Duração: ${duracao}
         content: cat
       }));
 
-      const datasInicio = items.map(i => new Date(i.start)).filter(d => !isNaN(d));
-      const datasFim = items.map(i => new Date(i.end || i.start)).filter(d => !isNaN(d));
+      const datasInicio = items.map(i => new Date(i.start));
+      const datasFim = items.map(i => new Date(i.end || i.start));
 
       const dataMin = new Date(Math.min(...datasInicio));
       const dataMax = new Date(Math.max(...datasFim));
@@ -126,7 +150,6 @@ Duração: ${duracao}
       if (timeline) timeline.destroy();
 
       timeline = new vis.Timeline(container, items, groups, {
-
         orientation: 'top',
         stack: true,
         stackSubgroups: true,
@@ -137,10 +160,7 @@ Duração: ${duracao}
         },
 
         start: dataMin,
-        end: dataMax,
-
-        zoomMin: 1000 * 60 * 60 * 24 * 30,
-        zoomMax: 1000 * 60 * 60 * 24 * 365 * 500
+        end: dataMax
       });
 
       timeline.on('select', function (props) {
@@ -153,6 +173,9 @@ Duração: ${duracao}
           document.getElementById("categoria").value = normalizarTexto(evento.categoria);
           document.getElementById("inicio").value = formatarData(evento.inicio);
           document.getElementById("fim").value = formatarData(evento.fim);
+
+          // 🔥 abre o form ao editar
+          document.getElementById("formContainer").style.display = "block";
         }
       });
 
@@ -220,11 +243,8 @@ document.getElementById("formEvento").addEventListener("submit", function(e) {
 function limparForm() {
   document.getElementById("formEvento").reset();
   document.getElementById("editId").value = "";
+  document.getElementById("formContainer").style.display = "none";
 }
-</script>
-
-</body>
-</html>
 </script>
 
 </body>
