@@ -17,7 +17,7 @@
 
     button { padding: 6px 10px; margin: 5px; }
 
-    /* 🔥 MODAL */
+    /* MODAL */
     #modal {
       display: none;
       position: fixed;
@@ -29,8 +29,8 @@
     #modalContent {
       background: white;
       padding: 20px;
-      width: 300px;
-      margin: 100px auto;
+      width: 320px;
+      margin: 80px auto;
       border-radius: 8px;
       position: relative;
     }
@@ -43,10 +43,15 @@
       font-weight: bold;
     }
 
-    input {
+    input, textarea {
       width: 100%;
       margin: 5px 0;
       padding: 5px;
+    }
+
+    textarea {
+      resize: none;
+      height: 80px;
     }
   </style>
 </head>
@@ -59,7 +64,7 @@
 
 <div id="timeline"></div>
 
-<!-- 🔥 MODAL -->
+<!-- MODAL -->
 <div id="modal">
   <div id="modalContent">
     <span id="closeBtn" onclick="fecharModal()">X</span>
@@ -71,6 +76,9 @@
     <input type="date" id="inicio">
     <input type="date" id="fim">
     <input type="text" id="categoria" placeholder="Categoria">
+
+    <!-- 🔥 NOVO CAMPO -->
+    <textarea id="notas" maxlength="500" placeholder="Notas (até 500 caracteres)"></textarea>
 
     <div id="botoes"></div>
   </div>
@@ -103,6 +111,9 @@ function abrirModalEditar(evento) {
   document.getElementById("fim").value = formatarData(evento.fim);
   document.getElementById("categoria").value = evento.categoria;
 
+  // 🔥 CARREGA NOTAS
+  document.getElementById("notas").value = evento.notas || "";
+
   document.getElementById("botoes").innerHTML = `
     <button onclick="atualizarEvento()">Atualizar</button>
     <button onclick="deletarEvento()">Deletar</button>
@@ -117,7 +128,6 @@ function fecharModal() {
 function formatarData(data) {
   if (!data) return "";
   const d = new Date(data);
-  if (isNaN(d)) return "";
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
@@ -156,20 +166,26 @@ function carregarTimeline() {
     .then(res => res.json())
     .then(data => {
 
-      const items = data.map(e => ({
-        id: Number(e.id),
-        content: "",
-        start: e.inicio,
-        end: e.fim || null,
-        group: normalizarTexto(e.categoria),
-        subgroup: e.id,
-        title: `
+      const items = data.map(e => {
+
+        let notasPreview = e.notas ? `<br><em>${e.notas.substring(0,100)}...</em>` : "";
+
+        return {
+          id: Number(e.id),
+          content: "",
+          start: e.inicio,
+          end: e.fim || null,
+          group: normalizarTexto(e.categoria),
+          subgroup: e.id,
+          title: `
 <strong>${e.titulo}</strong><br>
 Início: ${formatarDataBR(e.inicio)}<br>
 Fim: ${formatarDataBR(e.fim)}<br>
 Duração: ${calcularDuracao(e.inicio, e.fim)}
-        `
-      }));
+${notasPreview}
+          `
+        };
+      });
 
       const groups = [...new Set(data.map(e => normalizarTexto(e.categoria)))]
         .map(cat => ({ id: cat, content: cat }));
@@ -187,7 +203,6 @@ Duração: ${calcularDuracao(e.inicio, e.fim)}
         }
       );
 
-      // 🔥 CLICK → ABRE MODAL
       timeline.on('select', function (props) {
         if (props.items.length > 0) {
           const id = props.items[0];
@@ -201,8 +216,7 @@ Duração: ${calcularDuracao(e.inicio, e.fim)}
 
 // ===== CRUD =====
 function gerarNovoId(data) {
-  const ids = data.map(e => Number(e.id));
-  return Math.max(...ids) + 1;
+  return Math.max(...data.map(e => Number(e.id))) + 1;
 }
 
 function salvarEvento() {
@@ -221,7 +235,8 @@ function salvarEvento() {
             titulo: document.getElementById("titulo").value,
             inicio: document.getElementById("inicio").value,
             fim: document.getElementById("fim").value,
-            categoria: normalizarTexto(document.getElementById("categoria").value)
+            categoria: normalizarTexto(document.getElementById("categoria").value),
+            notas: document.getElementById("notas").value
           }]
         })
       }).then(() => {
@@ -242,7 +257,8 @@ function atualizarEvento() {
         titulo: document.getElementById("titulo").value,
         inicio: document.getElementById("inicio").value,
         fim: document.getElementById("fim").value,
-        categoria: normalizarTexto(document.getElementById("categoria").value)
+        categoria: normalizarTexto(document.getElementById("categoria").value),
+        notas: document.getElementById("notas").value
       }
     })
   }).then(() => {
@@ -268,6 +284,7 @@ function limparForm() {
   document.getElementById("inicio").value = "";
   document.getElementById("fim").value = "";
   document.getElementById("categoria").value = "";
+  document.getElementById("notas").value = "";
 }
 
 // INIT
