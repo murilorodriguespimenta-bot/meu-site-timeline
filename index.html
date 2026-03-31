@@ -66,13 +66,13 @@
       <input id="titulo" placeholder="Nome do evento">
       <input type="date" id="inicio">
       <input type="date" id="fim">
-      <textarea id="notas" maxlength="500"></textarea>
+      <textarea id="notas" maxlength="500" placeholder="Notas"></textarea>
       <input id="categoria" placeholder="Categoria">
     </div>
 
     <!-- CATEGORIA -->
     <div id="camposCategoria">
-      <input id="categoriaEdit">
+      <input id="categoriaEdit" placeholder="Nome da categoria">
       <input type="color" id="cor">
     </div>
 
@@ -84,7 +84,7 @@
 const API_URL="https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 
-// ===== VISUAL =====
+// ===== MODOS =====
 function modoEvento(){
   camposEvento.style.display="block";
   camposCategoria.style.display="none";
@@ -129,7 +129,7 @@ function abrirModalCategoria(cat, corAtual){
   modoCategoria();
 
   categoriaEdit.value=cat;
-  cor.value=corAtual||"#999999";
+  cor.value=corAtual || "#999999";
 
   botoes.innerHTML=`
     <button onclick="atualizarCategoria('${cat}')">Atualizar</button>
@@ -138,14 +138,15 @@ function abrirModalCategoria(cat, corAtual){
 
 function fecharModal(){ modal.style.display="none"; }
 
-// ===== CORES POR CATEGORIA =====
+// ===== CORES (FONTE ÚNICA) =====
 function obterMapaCores(data){
-  const mapa={};
+  const mapa = {};
 
-  data.forEach(e=>{
-    const cat=(e.categoria||"").trim();
-    if(!mapa[cat] && e.cor){
-      mapa[cat]=e.cor;
+  data.forEach(e => {
+    const cat = (e.categoria || "").trim();
+
+    if (e.cor) {
+      mapa[cat] = e.cor; // 🔥 sempre sobrescreve → última cor vence
     }
   });
 
@@ -158,11 +159,11 @@ function carregarTimeline(){
   .then(r=>r.json())
   .then(data=>{
 
-    const mapa=obterMapaCores(data);
+    const mapa = obterMapaCores(data);
 
-    const items=data.map(e=>{
-      const cat=(e.categoria||"").trim();
-      const cor=mapa[cat]||"#999";
+    const items = data.map(e=>{
+      const cat = (e.categoria||"").trim();
+      const cor = mapa[cat] || "#999";
 
       return{
         id:Number(e.id),
@@ -185,10 +186,17 @@ function carregarTimeline(){
       groups,
       {
         orientation:'top',
-        stack:true
+        stack:true,
+        stackSubgroups:true,
+
+        format:{
+          majorLabels:{year:'YYYY'},
+          minorLabels:{month:'MMM'}
+        }
       }
     );
 
+    // CLICK EVENTO
     timeline.on('select',props=>{
       if(props.items.length){
         const ev=data.find(e=>Number(e.id)===props.items[0]);
@@ -196,10 +204,11 @@ function carregarTimeline(){
       }
     });
 
+    // CLICK CATEGORIA
     timeline.on('click',props=>{
       if(props.what==="group-label"){
         const cat=props.group;
-        const corAtual=mapa[cat];
+        const corAtual = mapa[cat];
         abrirModalCategoria(cat, corAtual);
       }
     });
@@ -258,12 +267,12 @@ function atualizarCategoria(catAntiga){
   .then(r=>r.json())
   .then(data=>{
 
-    const novaCat=categoriaEdit.value;
-    const novaCor=cor.value;
+    const novaCat = categoriaEdit.value;
+    const novaCor = cor.value;
 
-    const updates=data
-      .filter(e=> (e.categoria||"").trim()===catAntiga)
-      .map(e=>fetch(`${API_URL}/id/${e.id}`,{
+    const updates = data
+      .filter(e => (e.categoria||"").trim() === catAntiga)
+      .map(e => fetch(`${API_URL}/id/${e.id}`,{
         method:"PUT",
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
