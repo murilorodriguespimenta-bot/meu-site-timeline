@@ -34,13 +34,22 @@ const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 let container = document.getElementById('timeline');
 
-// FORMATAR DATA
+// FORMATAR DATA (input)
 function formatarData(data) {
   if (!data) return "";
   const d = new Date(data);
   if (isNaN(d)) return "";
 
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// FORMATAR DATA (exibição)
+function formatarDataBR(data) {
+  if (!data) return "—";
+  const d = new Date(data);
+  if (isNaN(d)) return "—";
+
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
 // NORMALIZAR TEXTO
@@ -77,18 +86,29 @@ function carregarTimeline() {
 
       const dadosValidos = data.filter(e => e.inicio && !isNaN(new Date(e.inicio)));
 
-      const items = dadosValidos.map(e => ({
-        id: Number(e.id),
-        content: e.titulo,
-        start: e.inicio,
-        end: e.fim || null,
-        group: normalizarTexto(e.categoria),
+      const items = dadosValidos.map(e => {
 
-        // 🔥 SUBGROUP (resolve sobreposição)
-        subgroup: e.id,
+        const inicioBR = formatarDataBR(e.inicio);
+        const fimBR = formatarDataBR(e.fim);
+        const duracao = calcularDuracao(e.inicio, e.fim);
 
-        title: `Duração: ${calcularDuracao(e.inicio, e.fim)}`
-      }));
+        return {
+          id: Number(e.id),
+          content: e.titulo,
+          start: e.inicio,
+          end: e.fim || null,
+          group: normalizarTexto(e.categoria),
+          subgroup: e.id,
+
+          // 🔥 TOOLTIP COMPLETO
+          title: `
+<strong>${e.titulo}</strong><br>
+Início: ${inicioBR}<br>
+Fim: ${fimBR}<br>
+Duração: ${duracao}
+          `
+        };
+      });
 
       const gruposUnicos = [...new Set(dadosValidos.map(e => normalizarTexto(e.categoria)))];
 
@@ -108,18 +128,12 @@ function carregarTimeline() {
       timeline = new vis.Timeline(container, items, groups, {
 
         orientation: 'top',
-
-        // 🔥 AQUI ESTÁ A CORREÇÃO PRINCIPAL
         stack: true,
         stackSubgroups: true,
 
         format: {
-          majorLabels: {
-            year: 'YYYY'
-          },
-          minorLabels: {
-            month: 'MMM'
-          }
+          majorLabels: { year: 'YYYY' },
+          minorLabels: { month: 'MMM' }
         },
 
         start: dataMin,
@@ -207,6 +221,10 @@ function limparForm() {
   document.getElementById("formEvento").reset();
   document.getElementById("editId").value = "";
 }
+</script>
+
+</body>
+</html>
 </script>
 
 </body>
