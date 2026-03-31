@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>Minha Timeline</title>
+
+  <!-- Biblioteca timeline -->
+
+  <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
+
+  <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
+
+  <style>
+    body {
+      font-family: Arial;
+      margin: 20px;
+    }
+    #timeline {
+      height: 500px;
+      border: 1px solid #ccc;
+    }
+  </style>
+
+</head>
+
+<body>
+
+<h2>Minha Timeline</h2>
+<div id="timeline"></div>
+
+<script>
+fetch("https://sheetdb.io/api/v1/lgoh46p9jt5uf")
+  .then(res => res.json())
+  .then(data => {
+
+    const items = data.map(e => ({
+      id: Number(e.id),
+      content: e.titulo,
+      start: new Date(e.inicio),
+      end: new Date(e.fim)
+    }));
+
+    const container = document.getElementById('timeline');
+
+    const timeline = new vis.Timeline(container, items, {
+      stack: false
+    });
+
+  });
+</script>
+
+</body>
+</html>
