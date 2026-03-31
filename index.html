@@ -17,7 +17,6 @@
 
     button { padding: 6px 10px; margin: 5px; }
 
-    /* MODAL */
     #modal {
       display: none;
       position: fixed;
@@ -48,11 +47,6 @@
       margin: 5px 0;
       padding: 5px;
     }
-
-    textarea {
-      resize: none;
-      height: 80px;
-    }
   </style>
 </head>
 
@@ -77,8 +71,11 @@
     <input type="date" id="fim">
     <input type="text" id="categoria" placeholder="Categoria">
 
-    <!-- 🔥 NOVO CAMPO -->
-    <textarea id="notas" maxlength="500" placeholder="Notas (até 500 caracteres)"></textarea>
+    <!-- 🔥 COR -->
+    <label>Cor da categoria:</label>
+    <input type="color" id="cor">
+
+    <textarea id="notas" maxlength="500" placeholder="Notas"></textarea>
 
     <div id="botoes"></div>
   </div>
@@ -88,6 +85,26 @@
 const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 
 let timeline;
+
+// 🎨 GERAR COR AUTOMÁTICA
+function gerarCor() {
+  return '#' + Math.floor(Math.random()*16777215).toString(16);
+}
+
+// 🧠 MAPA DE CORES POR CATEGORIA
+function mapearCores(data) {
+  const mapa = {};
+
+  data.forEach(e => {
+    const cat = (e.categoria || "").trim();
+
+    if (!mapa[cat]) {
+      mapa[cat] = e.cor || gerarCor();
+    }
+  });
+
+  return mapa;
+}
 
 // ===== MODAL =====
 function abrirModalCriar() {
@@ -103,16 +120,16 @@ function abrirModalCriar() {
 
 function abrirModalEditar(evento) {
   document.getElementById("modal").style.display = "block";
-  document.getElementById("modalTitle").innerText = "Editar Evento";
 
   document.getElementById("editId").value = evento.id;
   document.getElementById("titulo").value = evento.titulo;
-  document.getElementById("inicio").value = formatarData(evento.inicio);
-  document.getElementById("fim").value = formatarData(evento.fim);
+  document.getElementById("inicio").value = evento.inicio;
+  document.getElementById("fim").value = evento.fim;
   document.getElementById("categoria").value = evento.categoria;
-
-  // 🔥 CARREGA NOTAS
   document.getElementById("notas").value = evento.notas || "";
+
+  // 🔥 CARREGA COR
+  document.getElementById("cor").value = evento.cor || "#cccccc";
 
   document.getElementById("botoes").innerHTML = `
     <button onclick="atualizarEvento()">Atualizar</button>
@@ -124,71 +141,34 @@ function fecharModal() {
   document.getElementById("modal").style.display = "none";
 }
 
-// ===== UTIL =====
-function formatarData(data) {
-  if (!data) return "";
-  const d = new Date(data);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-function formatarDataBR(data) {
-  if (!data) return "—";
-  const d = new Date(data);
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-}
-
-function normalizarTexto(txt) {
-  return (txt || "").trim();
-}
-
-function calcularDuracao(inicio, fim) {
-  const start = new Date(inicio);
-  const end = fim ? new Date(fim) : new Date(inicio);
-
-  let anos = end.getFullYear() - start.getFullYear();
-  let meses = end.getMonth() - start.getMonth();
-  let dias = end.getDate() - start.getDate();
-
-  if (dias < 0) { meses--; dias += 30; }
-  if (meses < 0) { anos--; meses += 12; }
-
-  let partes = [];
-  if (anos > 0) partes.push(`${anos} ano${anos>1?'s':''}`);
-  if (meses > 0) partes.push(`${meses} mês${meses>1?'es':''}`);
-  if (dias > 0) partes.push(`${dias} dia${dias>1?'s':''}`);
-
-  return partes.length ? partes.join(", ") : "Mesmo dia";
-}
-
 // ===== TIMELINE =====
 function carregarTimeline() {
   fetch(API_URL)
     .then(res => res.json())
     .then(data => {
 
-      const items = data.map(e => {
+      const mapaCores = mapearCores(data);
 
-        let notasPreview = e.notas ? `<br><em>${e.notas.substring(0,100)}...</em>` : "";
+      const items = data.map(e => {
+        const cor = mapaCores[(e.categoria || "").trim()];
 
         return {
           id: Number(e.id),
           content: "",
           start: e.inicio,
           end: e.fim || null,
-          group: normalizarTexto(e.categoria),
+          group: e.categoria,
           subgroup: e.id,
-          title: `
-<strong>${e.titulo}</strong><br>
-Início: ${formatarDataBR(e.inicio)}<br>
-Fim: ${formatarDataBR(e.fim)}<br>
-Duração: ${calcularDuracao(e.inicio, e.fim)}
-${notasPreview}
-          `
+
+          style: `background-color:${cor}; border-color:${cor};`
         };
       });
 
-      const groups = [...new Set(data.map(e => normalizarTexto(e.categoria)))]
-        .map(cat => ({ id: cat, content: cat }));
+      const groups = [...new Set(data.map(e => e.categoria))]
+        .map(cat => ({
+          id: cat,
+          content: cat
+        }));
 
       if (timeline) timeline.destroy();
 
@@ -197,7 +177,6 @@ ${notasPreview}
         items,
         groups,
         {
-          orientation: 'top',
           stack: true,
           stackSubgroups: true
         }
@@ -205,8 +184,7 @@ ${notasPreview}
 
       timeline.on('select', function (props) {
         if (props.items.length > 0) {
-          const id = props.items[0];
-          const evento = data.find(e => Number(e.id) === id);
+          const evento = data.find(e => Number(e.id) === props.items[0]);
           abrirModalEditar(evento);
         }
       });
@@ -224,19 +202,18 @@ function salvarEvento() {
     .then(res => res.json())
     .then(data => {
 
-      const novoId = gerarNovoId(data);
-
       fetch(API_URL, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           data: [{
-            id: novoId,
-            titulo: document.getElementById("titulo").value,
-            inicio: document.getElementById("inicio").value,
-            fim: document.getElementById("fim").value,
-            categoria: normalizarTexto(document.getElementById("categoria").value),
-            notas: document.getElementById("notas").value
+            id: gerarNovoId(data),
+            titulo: titulo.value,
+            inicio: inicio.value,
+            fim: fim.value,
+            categoria: categoria.value,
+            notas: notas.value,
+            cor: cor.value
           }]
         })
       }).then(() => {
@@ -247,18 +224,19 @@ function salvarEvento() {
 }
 
 function atualizarEvento() {
-  const id = document.getElementById("editId").value;
+  const id = editId.value;
 
   fetch(`${API_URL}/id/${id}`, {
     method: "PUT",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       data: {
-        titulo: document.getElementById("titulo").value,
-        inicio: document.getElementById("inicio").value,
-        fim: document.getElementById("fim").value,
-        categoria: normalizarTexto(document.getElementById("categoria").value),
-        notas: document.getElementById("notas").value
+        titulo: titulo.value,
+        inicio: inicio.value,
+        fim: fim.value,
+        categoria: categoria.value,
+        notas: notas.value,
+        cor: cor.value
       }
     })
   }).then(() => {
@@ -268,23 +246,21 @@ function atualizarEvento() {
 }
 
 function deletarEvento() {
-  const id = document.getElementById("editId").value;
-
-  fetch(`${API_URL}/id/${id}`, {
-    method: "DELETE"
-  }).then(() => {
-    fecharModal();
-    carregarTimeline();
-  });
+  fetch(`${API_URL}/id/${editId.value}`, { method: "DELETE" })
+    .then(() => {
+      fecharModal();
+      carregarTimeline();
+    });
 }
 
 function limparForm() {
-  document.getElementById("editId").value = "";
-  document.getElementById("titulo").value = "";
-  document.getElementById("inicio").value = "";
-  document.getElementById("fim").value = "";
-  document.getElementById("categoria").value = "";
-  document.getElementById("notas").value = "";
+  editId.value = "";
+  titulo.value = "";
+  inicio.value = "";
+  fim.value = "";
+  categoria.value = "";
+  notas.value = "";
+  cor.value = "#cccccc";
 }
 
 // INIT
