@@ -34,6 +34,20 @@ const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 let container = document.getElementById('timeline');
 
+// 🔥 FUNÇÃO PARA FORMATAR DATA (CORREÇÃO PRINCIPAL)
+function formatarData(data) {
+  if (!data) return "";
+
+  const d = new Date(data);
+  if (isNaN(d)) return "";
+
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+
+  return `${ano}-${mes}-${dia}`;
+}
+
 function carregarTimeline() {
   fetch(API_URL)
     .then(res => res.json())
@@ -60,7 +74,7 @@ function carregarTimeline() {
 
         stack: false,
 
-        // 🔥 FORÇA ANOS NO TOPO
+        // 🔥 ANOS SEMPRE NO TOPO
         orientation: 'top',
 
         format: {
@@ -81,7 +95,7 @@ function carregarTimeline() {
           }
         },
 
-        // 🔥 RANGE INICIAL MAIS AMPLO (IMPORTANTE)
+        // 🔥 RANGE INICIAL
         start: new Date(Math.min(...items.map(i => new Date(i.start)))),
         end: new Date(Math.max(...items.map(i => new Date(i.end || i.start)))),
 
@@ -91,7 +105,7 @@ function carregarTimeline() {
         editable: false
       });
 
-      // 🔥 CLICK PARA EDITAR
+      // 🔥 CLICK PARA EDITAR (COM CORREÇÃO DE DATA)
       timeline.on('select', function (props) {
         if (props.items.length > 0) {
           const id = props.items[0];
@@ -99,9 +113,11 @@ function carregarTimeline() {
 
           document.getElementById("editId").value = evento.id;
           document.getElementById("titulo").value = evento.titulo;
-          document.getElementById("inicio").value = evento.inicio;
-          document.getElementById("fim").value = evento.fim;
           document.getElementById("categoria").value = evento.categoria;
+
+          // 🔥 AQUI ESTÁ A CORREÇÃO
+          document.getElementById("inicio").value = formatarData(evento.inicio);
+          document.getElementById("fim").value = formatarData(evento.fim);
         }
       });
 
@@ -112,7 +128,7 @@ function carregarTimeline() {
 carregarTimeline();
 
 
-// 🔥 SALVAR (CREATE OU UPDATE)
+// 🔥 CREATE + UPDATE
 document.getElementById("formEvento").addEventListener("submit", function(e) {
   e.preventDefault();
 
@@ -121,7 +137,7 @@ document.getElementById("formEvento").addEventListener("submit", function(e) {
   const evento = {
     titulo: document.getElementById("titulo").value,
     inicio: document.getElementById("inicio").value,
-    fim: document.getElementById("fim").value,
+    fim: document.getElementById("fim").value || "",
     categoria: document.getElementById("categoria").value
   };
 
