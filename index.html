@@ -3,14 +3,12 @@
 <head>
   <title>Minha Timeline</title>
 
-  <!-- Biblioteca timeline -->
   <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
   <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
 
   <style>
     body { font-family: Arial; margin: 20px; }
     #timeline { height: 500px; border: 1px solid #ccc; margin-top: 20px; }
-    form { margin-bottom: 20px; }
     input, button { margin: 5px; padding: 5px; }
   </style>
 </head>
@@ -20,11 +18,12 @@
 <h2>Minha Timeline</h2>
 
 <form id="formEvento">
+  <input type="hidden" id="editId">
   <input type="text" id="titulo" placeholder="Nome do evento" required>
   <input type="date" id="inicio" required>
   <input type="date" id="fim">
-  <input type="text" id="categoria" placeholder="Categoria (camada)" required>
-  <button type="submit">Adicionar Evento</button>
+  <input type="text" id="categoria" placeholder="Categoria" required>
+  <button type="submit">Salvar</button>
 </form>
 
 <div id="timeline"></div>
@@ -58,63 +57,114 @@ function carregarTimeline() {
       if (timeline) timeline.destroy();
 
       timeline = new vis.Timeline(container, items, groups, {
+
         stack: false,
 
-        // 🔹 FORÇA EXIBIÇÃO DE ANOS
-        timeAxis: {
-          scale: 'year',
-          step: 1
-        },
+        // 🔥 FORÇA ANOS NO TOPO
+        orientation: 'top',
 
-        // 🔹 FORMATO DO TOPO (major) E SUBDIVISÃO
         format: {
           majorLabels: {
+            millisecond: 'YYYY',
+            second: 'YYYY',
+            minute: 'YYYY',
+            hour: 'YYYY',
+            weekday: 'YYYY',
+            day: 'YYYY',
+            week: 'YYYY',
+            month: 'YYYY',
             year: 'YYYY'
           },
           minorLabels: {
-            month: 'MMM'
+            month: 'MMM',
+            day: 'DD'
           }
         },
 
-        // 🔹 ZOOM LIMITES (ajuda a manter anos visíveis)
-        zoomMin: 1000 * 60 * 60 * 24 * 30 * 6,   // ~6 meses
-        zoomMax: 1000 * 60 * 60 * 24 * 365 * 200 // 200 anos
+        // 🔥 RANGE INICIAL MAIS AMPLO (IMPORTANTE)
+        start: new Date(Math.min(...items.map(i => new Date(i.start)))),
+        end: new Date(Math.max(...items.map(i => new Date(i.end || i.start)))),
 
+        zoomMin: 1000 * 60 * 60 * 24 * 30,
+        zoomMax: 1000 * 60 * 60 * 24 * 365 * 500,
+
+        editable: false
+      });
+
+      // 🔥 CLICK PARA EDITAR
+      timeline.on('select', function (props) {
+        if (props.items.length > 0) {
+          const id = props.items[0];
+          const evento = data.find(e => Number(e.id) === id);
+
+          document.getElementById("editId").value = evento.id;
+          document.getElementById("titulo").value = evento.titulo;
+          document.getElementById("inicio").value = evento.inicio;
+          document.getElementById("fim").value = evento.fim;
+          document.getElementById("categoria").value = evento.categoria;
+        }
       });
 
     });
 }
 
-// carregar inicial
+// LOAD
 carregarTimeline();
 
-// FORM
+
+// 🔥 SALVAR (CREATE OU UPDATE)
 document.getElementById("formEvento").addEventListener("submit", function(e) {
   e.preventDefault();
 
-  const novoEvento = {
-    data: [{
-      id: Date.now(),
-      titulo: document.getElementById("titulo").value,
-      inicio: document.getElementById("inicio").value,
-      fim: document.getElementById("fim").value,
-      categoria: document.getElementById("categoria").value
-    }]
+  const id = document.getElementById("editId").value;
+
+  const evento = {
+    titulo: document.getElementById("titulo").value,
+    inicio: document.getElementById("inicio").value,
+    fim: document.getElementById("fim").value,
+    categoria: document.getElementById("categoria").value
   };
 
-  fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(novoEvento)
-  })
-  .then(res => res.json())
-  .then(() => {
-    document.getElementById("formEvento").reset();
-    carregarTimeline();
-  });
+  if (id) {
+    // 🔹 UPDATE
+    fetch(`${API_URL}/id/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ data: evento })
+    })
+    .then(() => {
+      limparForm();
+      carregarTimeline();
+    });
+
+  } else {
+    // 🔹 CREATE
+    fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        data: [{
+          id: Date.now(),
+          ...evento
+        }]
+      })
+    })
+    .then(() => {
+      limparForm();
+      carregarTimeline();
+    });
+  }
 });
+
+function limparForm() {
+  document.getElementById("formEvento").reset();
+  document.getElementById("editId").value = "";
+}
+
 </script>
 
 </body>
