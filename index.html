@@ -15,16 +15,38 @@
       margin-top: 20px;
     }
 
-    input, button {
-      margin: 5px;
-      padding: 5px;
+    button { padding: 6px 10px; margin: 5px; }
+
+    /* 🔥 MODAL */
+    #modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
     }
 
-    #formContainer {
-      display: none;
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
+    #modalContent {
+      background: white;
+      padding: 20px;
+      width: 300px;
+      margin: 100px auto;
+      border-radius: 8px;
+      position: relative;
+    }
+
+    #closeBtn {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      margin: 5px 0;
+      padding: 5px;
     }
   </style>
 </head>
@@ -33,34 +55,65 @@
 
 <h2>Minha Timeline</h2>
 
-<button onclick="toggleForm()">Add Event</button>
-
-<div id="formContainer">
-  <form id="formEvento">
-    <input type="hidden" id="editId">
-    <input type="text" id="titulo" placeholder="Nome do evento" required>
-    <input type="date" id="inicio" required>
-    <input type="date" id="fim">
-    <input type="text" id="categoria" placeholder="Categoria" required>
-    <button type="submit">Salvar</button>
-  </form>
-</div>
+<button onclick="abrirModalCriar()">Add Event</button>
 
 <div id="timeline"></div>
+
+<!-- 🔥 MODAL -->
+<div id="modal">
+  <div id="modalContent">
+    <span id="closeBtn" onclick="fecharModal()">X</span>
+
+    <h3 id="modalTitle">Evento</h3>
+
+    <input type="hidden" id="editId">
+    <input type="text" id="titulo" placeholder="Nome do evento">
+    <input type="date" id="inicio">
+    <input type="date" id="fim">
+    <input type="text" id="categoria" placeholder="Categoria">
+
+    <div id="botoes"></div>
+  </div>
+</div>
 
 <script>
 const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 
 let timeline;
-let container = document.getElementById('timeline');
 
-// 🔥 TOGGLE FORM
-function toggleForm() {
-  const form = document.getElementById("formContainer");
-  form.style.display = form.style.display === "none" ? "block" : "none";
+// ===== MODAL =====
+function abrirModalCriar() {
+  document.getElementById("modal").style.display = "block";
+  document.getElementById("modalTitle").innerText = "Novo Evento";
+
+  limparForm();
+
+  document.getElementById("botoes").innerHTML = `
+    <button onclick="salvarEvento()">Salvar</button>
+  `;
 }
 
-// FORMATAR DATA INPUT
+function abrirModalEditar(evento) {
+  document.getElementById("modal").style.display = "block";
+  document.getElementById("modalTitle").innerText = "Editar Evento";
+
+  document.getElementById("editId").value = evento.id;
+  document.getElementById("titulo").value = evento.titulo;
+  document.getElementById("inicio").value = formatarData(evento.inicio);
+  document.getElementById("fim").value = formatarData(evento.fim);
+  document.getElementById("categoria").value = evento.categoria;
+
+  document.getElementById("botoes").innerHTML = `
+    <button onclick="atualizarEvento()">Atualizar</button>
+    <button onclick="deletarEvento()">Deletar</button>
+  `;
+}
+
+function fecharModal() {
+  document.getElementById("modal").style.display = "none";
+}
+
+// ===== UTIL =====
 function formatarData(data) {
   if (!data) return "";
   const d = new Date(data);
@@ -68,20 +121,16 @@ function formatarData(data) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// FORMATAR DATA EXIBIÇÃO
 function formatarDataBR(data) {
   if (!data) return "—";
   const d = new Date(data);
-  if (isNaN(d)) return "—";
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
-// NORMALIZAR TEXTO
 function normalizarTexto(txt) {
   return (txt || "").trim();
 }
 
-// CALCULAR DURAÇÃO
 function calcularDuracao(inicio, fim) {
   const start = new Date(inicio);
   const end = fim ? new Date(fim) : new Date(inicio);
@@ -101,150 +150,128 @@ function calcularDuracao(inicio, fim) {
   return partes.length ? partes.join(", ") : "Mesmo dia";
 }
 
+// ===== TIMELINE =====
 function carregarTimeline() {
   fetch(API_URL)
     .then(res => res.json())
     .then(data => {
 
-      const dadosValidos = data.filter(e => e.inicio && !isNaN(new Date(e.inicio)));
-
-      const items = dadosValidos.map(e => {
-
-        const inicioBR = formatarDataBR(e.inicio);
-        const fimBR = formatarDataBR(e.fim);
-        const duracao = calcularDuracao(e.inicio, e.fim);
-
-        return {
-          id: Number(e.id),
-
-          // 🔥 SEM TEXTO NA BARRA
-          content: "",
-
-          start: e.inicio,
-          end: e.fim || null,
-          group: normalizarTexto(e.categoria),
-          subgroup: e.id,
-
-          title: `
+      const items = data.map(e => ({
+        id: Number(e.id),
+        content: "",
+        start: e.inicio,
+        end: e.fim || null,
+        group: normalizarTexto(e.categoria),
+        subgroup: e.id,
+        title: `
 <strong>${e.titulo}</strong><br>
-Início: ${inicioBR}<br>
-Fim: ${fimBR}<br>
-Duração: ${duracao}
-          `
-        };
-      });
-
-      const gruposUnicos = [...new Set(dadosValidos.map(e => normalizarTexto(e.categoria)))];
-
-      const groups = gruposUnicos.map(cat => ({
-        id: cat,
-        content: cat
+Início: ${formatarDataBR(e.inicio)}<br>
+Fim: ${formatarDataBR(e.fim)}<br>
+Duração: ${calcularDuracao(e.inicio, e.fim)}
+        `
       }));
 
-      const datasInicio = items.map(i => new Date(i.start));
-      const datasFim = items.map(i => new Date(i.end || i.start));
-
-      const dataMin = new Date(Math.min(...datasInicio));
-      const dataMax = new Date(Math.max(...datasFim));
+      const groups = [...new Set(data.map(e => normalizarTexto(e.categoria)))]
+        .map(cat => ({ id: cat, content: cat }));
 
       if (timeline) timeline.destroy();
 
-      timeline = new vis.Timeline(container, items, groups, {
-        orientation: 'top',
-        stack: true,
-        stackSubgroups: true,
+      timeline = new vis.Timeline(
+        document.getElementById('timeline'),
+        items,
+        groups,
+        {
+          orientation: 'top',
+          stack: true,
+          stackSubgroups: true
+        }
+      );
 
-        format: {
-          majorLabels: { year: 'YYYY' },
-          minorLabels: { month: 'MMM' }
-        },
-
-        start: dataMin,
-        end: dataMax
-      });
-
+      // 🔥 CLICK → ABRE MODAL
       timeline.on('select', function (props) {
         if (props.items.length > 0) {
           const id = props.items[0];
           const evento = data.find(e => Number(e.id) === id);
-
-          document.getElementById("editId").value = evento.id;
-          document.getElementById("titulo").value = evento.titulo;
-          document.getElementById("categoria").value = normalizarTexto(evento.categoria);
-          document.getElementById("inicio").value = formatarData(evento.inicio);
-          document.getElementById("fim").value = formatarData(evento.fim);
-
-          // 🔥 abre o form ao editar
-          document.getElementById("formContainer").style.display = "block";
+          abrirModalEditar(evento);
         }
       });
 
     });
 }
 
-// LOAD
-carregarTimeline();
-
+// ===== CRUD =====
 function gerarNovoId(data) {
-  const ids = data.map(e => Number(e.id)).filter(n => !isNaN(n));
-  return ids.length ? Math.max(...ids) + 1 : 1;
+  const ids = data.map(e => Number(e.id));
+  return Math.max(...ids) + 1;
 }
 
-// CREATE + UPDATE
-document.getElementById("formEvento").addEventListener("submit", function(e) {
-  e.preventDefault();
-
-  const id = document.getElementById("editId").value;
-
+function salvarEvento() {
   fetch(API_URL)
     .then(res => res.json())
     .then(data => {
 
-      const evento = {
+      const novoId = gerarNovoId(data);
+
+      fetch(API_URL, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          data: [{
+            id: novoId,
+            titulo: document.getElementById("titulo").value,
+            inicio: document.getElementById("inicio").value,
+            fim: document.getElementById("fim").value,
+            categoria: normalizarTexto(document.getElementById("categoria").value)
+          }]
+        })
+      }).then(() => {
+        fecharModal();
+        carregarTimeline();
+      });
+    });
+}
+
+function atualizarEvento() {
+  const id = document.getElementById("editId").value;
+
+  fetch(`${API_URL}/id/${id}`, {
+    method: "PUT",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      data: {
         titulo: document.getElementById("titulo").value,
         inicio: document.getElementById("inicio").value,
-        fim: document.getElementById("fim").value || "",
+        fim: document.getElementById("fim").value,
         categoria: normalizarTexto(document.getElementById("categoria").value)
-      };
-
-      if (id) {
-        fetch(`${API_URL}/id/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ data: evento })
-        })
-        .then(() => {
-          limparForm();
-          carregarTimeline();
-        });
-
-      } else {
-        const novoId = gerarNovoId(data);
-
-        fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            data: [{
-              id: novoId,
-              ...evento
-            }]
-          })
-        })
-        .then(() => {
-          limparForm();
-          carregarTimeline();
-        });
       }
+    })
+  }).then(() => {
+    fecharModal();
+    carregarTimeline();
+  });
+}
 
-    });
-});
+function deletarEvento() {
+  const id = document.getElementById("editId").value;
+
+  fetch(`${API_URL}/id/${id}`, {
+    method: "DELETE"
+  }).then(() => {
+    fecharModal();
+    carregarTimeline();
+  });
+}
 
 function limparForm() {
-  document.getElementById("formEvento").reset();
   document.getElementById("editId").value = "";
-  document.getElementById("formContainer").style.display = "none";
+  document.getElementById("titulo").value = "";
+  document.getElementById("inicio").value = "";
+  document.getElementById("fim").value = "";
+  document.getElementById("categoria").value = "";
 }
+
+// INIT
+carregarTimeline();
 </script>
 
 </body>
