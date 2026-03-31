@@ -34,7 +34,7 @@ const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 let container = document.getElementById('timeline');
 
-// 🔥 FUNÇÃO PARA FORMATAR DATA (CORREÇÃO PRINCIPAL)
+// 🔥 FORMATAR DATA
 function formatarData(data) {
   if (!data) return "";
 
@@ -68,13 +68,24 @@ function carregarTimeline() {
         content: cat
       }));
 
+      // 🔥 FILTRAR DATAS VÁLIDAS
+      const datasInicio = items
+        .map(i => new Date(i.start))
+        .filter(d => !isNaN(d));
+
+      const datasFim = items
+        .map(i => new Date(i.end || i.start))
+        .filter(d => !isNaN(d));
+
+      // 🔥 FALLBACK SE DER PROBLEMA
+      const dataMin = datasInicio.length ? new Date(Math.min(...datasInicio)) : new Date();
+      const dataMax = datasFim.length ? new Date(Math.max(...datasFim)) : new Date();
+
       if (timeline) timeline.destroy();
 
       timeline = new vis.Timeline(container, items, groups, {
 
         stack: false,
-
-        // 🔥 ANOS SEMPRE NO TOPO
         orientation: 'top',
 
         format: {
@@ -95,9 +106,8 @@ function carregarTimeline() {
           }
         },
 
-        // 🔥 RANGE INICIAL
-        start: new Date(Math.min(...items.map(i => new Date(i.start)))),
-        end: new Date(Math.max(...items.map(i => new Date(i.end || i.start)))),
+        start: dataMin,
+        end: dataMax,
 
         zoomMin: 1000 * 60 * 60 * 24 * 30,
         zoomMax: 1000 * 60 * 60 * 24 * 365 * 500,
@@ -105,7 +115,7 @@ function carregarTimeline() {
         editable: false
       });
 
-      // 🔥 CLICK PARA EDITAR (COM CORREÇÃO DE DATA)
+      // 🔥 CLICK PARA EDITAR
       timeline.on('select', function (props) {
         if (props.items.length > 0) {
           const id = props.items[0];
@@ -115,7 +125,6 @@ function carregarTimeline() {
           document.getElementById("titulo").value = evento.titulo;
           document.getElementById("categoria").value = evento.categoria;
 
-          // 🔥 AQUI ESTÁ A CORREÇÃO
           document.getElementById("inicio").value = formatarData(evento.inicio);
           document.getElementById("fim").value = formatarData(evento.fim);
         }
@@ -142,12 +151,9 @@ document.getElementById("formEvento").addEventListener("submit", function(e) {
   };
 
   if (id) {
-    // 🔹 UPDATE
     fetch(`${API_URL}/id/${id}`, {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: evento })
     })
     .then(() => {
@@ -156,12 +162,9 @@ document.getElementById("formEvento").addEventListener("submit", function(e) {
     });
 
   } else {
-    // 🔹 CREATE
     fetch(API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         data: [{
           id: Date.now(),
