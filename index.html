@@ -1,51 +1,109 @@
 <!DOCTYPE html>
-
 <html>
 <head>
   <title>Minha Timeline</title>
 
   <!-- Biblioteca timeline -->
-
   <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
-
   <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
 
   <style>
-    body {
-      font-family: Arial;
-      margin: 20px;
-    }
-    #timeline {
-      height: 500px;
-      border: 1px solid #ccc;
-    }
+    body { font-family: Arial; margin: 20px; }
+    #timeline { height: 500px; border: 1px solid #ccc; margin-top: 20px; }
+    form { margin-bottom: 20px; }
+    input, button { margin: 5px; padding: 5px; }
   </style>
-
 </head>
 
 <body>
 
 <h2>Minha Timeline</h2>
+
+<!-- FORMULÁRIO -->
+<form id="formEvento">
+  <input type="text" id="titulo" placeholder="Nome do evento" required>
+  <input type="date" id="inicio" required>
+  <input type="date" id="fim">
+  <input type="text" id="categoria" placeholder="Categoria (camada)" required>
+  <button type="submit">Adicionar Evento</button>
+</form>
+
 <div id="timeline"></div>
 
 <script>
-fetch("https://sheetdb.io/api/v1/lgoh46p9jt5uf")
-  .then(res => res.json())
-  .then(data => {
+const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 
-    const items = data.map(e => ({
-      id: Number(e.id),
-      content: e.titulo,
-      start: new Date(e.inicio),
-      end: new Date(e.fim)
-    }));
+let timeline;
+let container = document.getElementById('timeline');
 
-    const container = document.getElementById('timeline');
+function carregarTimeline() {
+  fetch(API_URL)
+    .then(res => res.json())
+    .then(data => {
 
-    const timeline = new vis.Timeline(container, items, {
-      stack: false
+      const items = data.map(e => ({
+        id: Number(e.id),
+        content: e.titulo,
+        start: e.inicio,
+        end: e.fim || null,
+        group: e.categoria
+      }));
+
+      // Criar grupos (camadas únicas)
+      const gruposUnicos = [...new Set(data.map(e => e.categoria))];
+
+      const groups = gruposUnicos.map(cat => ({
+        id: cat,
+        content: cat
+      }));
+
+      if (timeline) {
+        timeline.destroy();
+      }
+
+      timeline = new vis.Timeline(container, items, groups, {
+        stack: false
+      });
+
     });
+}
 
+// CARREGA AO INICIAR
+carregarTimeline();
+
+
+// SUBMIT DO FORMULÁRIO
+document.getElementById("formEvento").addEventListener("submit", function(e) {
+  e.preventDefault();
+
+  const novoEvento = {
+    data: [{
+      id: Date.now(), // id simples
+      titulo: document.getElementById("titulo").value,
+      inicio: document.getElementById("inicio").value,
+      fim: document.getElementById("fim").value,
+      categoria: document.getElementById("categoria").value
+    }]
+  };
+
+  fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(novoEvento)
+  })
+  .then(res => res.json())
+  .then(() => {
+    alert("Evento adicionado!");
+    document.getElementById("formEvento").reset();
+    carregarTimeline();
+  });
+});
+</script>
+
+</body>
+</html>
   });
 </script>
 
