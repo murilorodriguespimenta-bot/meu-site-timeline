@@ -67,11 +67,12 @@
       <input type="date" id="inicio">
       <input type="date" id="fim">
       <textarea id="notas" maxlength="500"></textarea>
+      <input id="categoria" placeholder="Categoria">
     </div>
 
     <!-- CATEGORIA -->
     <div id="camposCategoria">
-      <input id="categoria">
+      <input id="categoriaEdit">
       <input type="color" id="cor">
     </div>
 
@@ -83,12 +84,10 @@
 const API_URL="https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 
-function normalizar(t){return (t||"").trim();}
-
-// ===== CONTROLE VISUAL =====
+// ===== VISUAL =====
 function modoEvento(){
   camposEvento.style.display="block";
-  camposCategoria.style.display="block";
+  camposCategoria.style.display="none";
 }
 
 function modoCategoria(){
@@ -117,7 +116,6 @@ function abrirModalEditarEvento(e){
   fim.value=e.fim;
   notas.value=e.notas||"";
   categoria.value=e.categoria;
-  cor.value=e.cor||"#cccccc";
 
   botoes.innerHTML=`
     <button onclick="atualizarEvento()">Atualizar</button>
@@ -128,11 +126,10 @@ function abrirModalEditarEvento(e){
 function abrirModalCategoria(cat, corAtual){
   modal.style.display="block";
   modalTitle.innerText="Editar Categoria";
-
   modoCategoria();
 
-  categoria.value=cat;
-  cor.value=corAtual||"#cccccc";
+  categoriaEdit.value=cat;
+  cor.value=corAtual||"#999999";
 
   botoes.innerHTML=`
     <button onclick="atualizarCategoria('${cat}')">Atualizar</button>
@@ -141,12 +138,12 @@ function abrirModalCategoria(cat, corAtual){
 
 function fecharModal(){ modal.style.display="none"; }
 
-// ===== CORES CORRETAS =====
+// ===== CORES POR CATEGORIA =====
 function obterMapaCores(data){
   const mapa={};
 
   data.forEach(e=>{
-    const cat=normalizar(e.categoria);
+    const cat=(e.categoria||"").trim();
     if(!mapa[cat] && e.cor){
       mapa[cat]=e.cor;
     }
@@ -164,8 +161,8 @@ function carregarTimeline(){
     const mapa=obterMapaCores(data);
 
     const items=data.map(e=>{
-      const cat=normalizar(e.categoria);
-      const corItem = e.cor || mapa[cat] || "#999";
+      const cat=(e.categoria||"").trim();
+      const cor=mapa[cat]||"#999";
 
       return{
         id:Number(e.id),
@@ -173,11 +170,11 @@ function carregarTimeline(){
         start:e.inicio,
         end:e.fim||null,
         group:cat,
-        style:`background:${corItem};border-color:${corItem}`
+        style:`background:${cor};border-color:${cor}`
       };
     });
 
-    const groups=[...new Set(data.map(e=>normalizar(e.categoria)))]
+    const groups=[...new Set(data.map(e=>e.categoria))]
       .map(cat=>({id:cat,content:cat}));
 
     if(timeline) timeline.destroy();
@@ -202,7 +199,7 @@ function carregarTimeline(){
     timeline.on('click',props=>{
       if(props.what==="group-label"){
         const cat=props.group;
-        const corAtual = mapa[cat] || "#cccccc";
+        const corAtual=mapa[cat];
         abrirModalCategoria(cat, corAtual);
       }
     });
@@ -210,7 +207,7 @@ function carregarTimeline(){
   });
 }
 
-// ===== CRUD =====
+// ===== CRUD EVENTO =====
 function gerarNovoId(data){
   return Math.max(...data.map(e=>Number(e.id)))+1;
 }
@@ -227,8 +224,7 @@ function salvarEvento(){
           inicio:inicio.value,
           fim:fim.value,
           categoria:categoria.value,
-          notas:notas.value,
-          cor:cor.value
+          notas:notas.value
         }]
       })
     }).then(()=>{fecharModal();carregarTimeline();});
@@ -245,8 +241,7 @@ function atualizarEvento(){
         inicio:inicio.value,
         fim:fim.value,
         categoria:categoria.value,
-        notas:notas.value,
-        cor:cor.value
+        notas:notas.value
       }
     })
   }).then(()=>{fecharModal();carregarTimeline();});
@@ -257,17 +252,17 @@ function deletarEvento(){
   .then(()=>{fecharModal();carregarTimeline();});
 }
 
-// 🔥 CORRIGIDO (só altera a categoria correta)
+// ===== ATUALIZAR CATEGORIA =====
 function atualizarCategoria(catAntiga){
   fetch(API_URL)
   .then(r=>r.json())
   .then(data=>{
 
-    const novaCat=categoria.value;
+    const novaCat=categoriaEdit.value;
     const novaCor=cor.value;
 
     const updates=data
-      .filter(e=>normalizar(e.categoria)===normalizar(catAntiga))
+      .filter(e=> (e.categoria||"").trim()===catAntiga)
       .map(e=>fetch(`${API_URL}/id/${e.id}`,{
         method:"PUT",
         headers:{'Content-Type':'application/json'},
@@ -292,9 +287,8 @@ function limparForm(){
   titulo.value="";
   inicio.value="";
   fim.value="";
-  categoria.value="";
   notas.value="";
-  cor.value="#cccccc";
+  categoria.value="";
 }
 
 carregarTimeline();
