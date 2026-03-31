@@ -34,57 +34,40 @@ const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
 let timeline;
 let container = document.getElementById('timeline');
 
-// 🔥 FORMATAR DATA
+// FORMATAR DATA
 function formatarData(data) {
   if (!data) return "";
-
   const d = new Date(data);
   if (isNaN(d)) return "";
 
-  const ano = d.getFullYear();
-  const mes = String(d.getMonth() + 1).padStart(2, '0');
-  const dia = String(d.getDate()).padStart(2, '0');
-
-  return `${ano}-${mes}-${dia}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// 🔥 NORMALIZAR TEXTO
+// NORMALIZAR TEXTO
 function normalizarTexto(txt) {
   return (txt || "").trim();
 }
 
-// 🔥 CALCULAR DURAÇÃO
+// CALCULAR DURAÇÃO
 function calcularDuracao(inicio, fim) {
-  if (!inicio) return "Sem data";
-
   const start = new Date(inicio);
   const end = fim ? new Date(fim) : new Date(inicio);
 
-  if (isNaN(start) || isNaN(end)) return "Data inválida";
+  if (isNaN(start) || isNaN(end)) return "";
 
   let anos = end.getFullYear() - start.getFullYear();
   let meses = end.getMonth() - start.getMonth();
   let dias = end.getDate() - start.getDate();
 
-  if (dias < 0) {
-    meses--;
-    dias += 30;
-  }
-
-  if (meses < 0) {
-    anos--;
-    meses += 12;
-  }
+  if (dias < 0) { meses--; dias += 30; }
+  if (meses < 0) { anos--; meses += 12; }
 
   let partes = [];
+  if (anos > 0) partes.push(`${anos} ano${anos>1?'s':''}`);
+  if (meses > 0) partes.push(`${meses} mês${meses>1?'es':''}`);
+  if (dias > 0) partes.push(`${dias} dia${dias>1?'s':''}`);
 
-  if (anos > 0) partes.push(`${anos} ano${anos > 1 ? 's' : ''}`);
-  if (meses > 0) partes.push(`${meses} mês${meses > 1 ? 'es' : ''}`);
-  if (dias > 0) partes.push(`${dias} dia${dias > 1 ? 's' : ''}`);
-
-  if (partes.length === 0) return "Mesmo dia";
-
-  return partes.join(", ");
+  return partes.length ? partes.join(", ") : "Mesmo dia";
 }
 
 function carregarTimeline() {
@@ -92,25 +75,20 @@ function carregarTimeline() {
     .then(res => res.json())
     .then(data => {
 
-      const dadosValidos = data.filter(e => {
-        const d = new Date(e.inicio);
-        return e.inicio && !isNaN(d);
-      });
+      const dadosValidos = data.filter(e => e.inicio && !isNaN(new Date(e.inicio)));
 
-      const items = dadosValidos.map(e => {
-        const duracao = calcularDuracao(e.inicio, e.fim);
+      const items = dadosValidos.map(e => ({
+        id: Number(e.id),
+        content: e.titulo,
+        start: e.inicio,
+        end: e.fim || null,
+        group: normalizarTexto(e.categoria),
 
-        return {
-          id: Number(e.id),
-          content: e.titulo,
-          start: e.inicio,
-          end: e.fim || null,
-          group: normalizarTexto(e.categoria),
+        // 🔥 SUBGROUP (resolve sobreposição)
+        subgroup: e.id,
 
-          // 🔥 TOOLTIP
-          title: `Duração: ${duracao}`
-        };
-      });
+        title: `Duração: ${calcularDuracao(e.inicio, e.fim)}`
+      }));
 
       const gruposUnicos = [...new Set(dadosValidos.map(e => normalizarTexto(e.categoria)))];
 
@@ -122,31 +100,25 @@ function carregarTimeline() {
       const datasInicio = items.map(i => new Date(i.start)).filter(d => !isNaN(d));
       const datasFim = items.map(i => new Date(i.end || i.start)).filter(d => !isNaN(d));
 
-      const dataMin = datasInicio.length ? new Date(Math.min(...datasInicio)) : new Date();
-      const dataMax = datasFim.length ? new Date(Math.max(...datasFim)) : new Date();
+      const dataMin = new Date(Math.min(...datasInicio));
+      const dataMax = new Date(Math.max(...datasFim));
 
       if (timeline) timeline.destroy();
 
       timeline = new vis.Timeline(container, items, groups, {
 
-        stack: false,
         orientation: 'top',
+
+        // 🔥 AQUI ESTÁ A CORREÇÃO PRINCIPAL
+        stack: true,
+        stackSubgroups: true,
 
         format: {
           majorLabels: {
-            millisecond: 'YYYY',
-            second: 'YYYY',
-            minute: 'YYYY',
-            hour: 'YYYY',
-            weekday: 'YYYY',
-            day: 'YYYY',
-            week: 'YYYY',
-            month: 'YYYY',
             year: 'YYYY'
           },
           minorLabels: {
-            month: 'MMM',
-            day: 'DD'
+            month: 'MMM'
           }
         },
 
@@ -154,12 +126,9 @@ function carregarTimeline() {
         end: dataMax,
 
         zoomMin: 1000 * 60 * 60 * 24 * 30,
-        zoomMax: 1000 * 60 * 60 * 24 * 365 * 500,
-
-        editable: false
+        zoomMax: 1000 * 60 * 60 * 24 * 365 * 500
       });
 
-      // 🔥 CLICK PARA EDITAR
       timeline.on('select', function (props) {
         if (props.items.length > 0) {
           const id = props.items[0];
@@ -168,7 +137,6 @@ function carregarTimeline() {
           document.getElementById("editId").value = evento.id;
           document.getElementById("titulo").value = evento.titulo;
           document.getElementById("categoria").value = normalizarTexto(evento.categoria);
-
           document.getElementById("inicio").value = formatarData(evento.inicio);
           document.getElementById("fim").value = formatarData(evento.fim);
         }
@@ -180,15 +148,12 @@ function carregarTimeline() {
 // LOAD
 carregarTimeline();
 
-
-// 🔥 GERAR ID SEQUENCIAL
 function gerarNovoId(data) {
   const ids = data.map(e => Number(e.id)).filter(n => !isNaN(n));
   return ids.length ? Math.max(...ids) + 1 : 1;
 }
 
-
-// 🔥 CREATE + UPDATE
+// CREATE + UPDATE
 document.getElementById("formEvento").addEventListener("submit", function(e) {
   e.preventDefault();
 
@@ -242,7 +207,6 @@ function limparForm() {
   document.getElementById("formEvento").reset();
   document.getElementById("editId").value = "";
 }
-
 </script>
 
 </body>
