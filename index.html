@@ -53,26 +53,65 @@ function normalizarTexto(txt) {
   return (txt || "").trim();
 }
 
+// 🔥 CALCULAR DURAÇÃO
+function calcularDuracao(inicio, fim) {
+  if (!inicio) return "Sem data";
+
+  const start = new Date(inicio);
+  const end = fim ? new Date(fim) : new Date(inicio);
+
+  if (isNaN(start) || isNaN(end)) return "Data inválida";
+
+  let anos = end.getFullYear() - start.getFullYear();
+  let meses = end.getMonth() - start.getMonth();
+  let dias = end.getDate() - start.getDate();
+
+  if (dias < 0) {
+    meses--;
+    dias += 30;
+  }
+
+  if (meses < 0) {
+    anos--;
+    meses += 12;
+  }
+
+  let partes = [];
+
+  if (anos > 0) partes.push(`${anos} ano${anos > 1 ? 's' : ''}`);
+  if (meses > 0) partes.push(`${meses} mês${meses > 1 ? 'es' : ''}`);
+  if (dias > 0) partes.push(`${dias} dia${dias > 1 ? 's' : ''}`);
+
+  if (partes.length === 0) return "Mesmo dia";
+
+  return partes.join(", ");
+}
+
 function carregarTimeline() {
   fetch(API_URL)
     .then(res => res.json())
     .then(data => {
 
-      // 🔥 FILTRA E NORMALIZA DADOS
       const dadosValidos = data.filter(e => {
-        const dataValida = new Date(e.inicio);
-        return e.inicio && !isNaN(dataValida);
+        const d = new Date(e.inicio);
+        return e.inicio && !isNaN(d);
       });
 
-      const items = dadosValidos.map(e => ({
-        id: Number(e.id),
-        content: e.titulo,
-        start: e.inicio,
-        end: e.fim || null,
-        group: normalizarTexto(e.categoria)
-      }));
+      const items = dadosValidos.map(e => {
+        const duracao = calcularDuracao(e.inicio, e.fim);
 
-      // 🔥 GRUPOS NORMALIZADOS
+        return {
+          id: Number(e.id),
+          content: e.titulo,
+          start: e.inicio,
+          end: e.fim || null,
+          group: normalizarTexto(e.categoria),
+
+          // 🔥 TOOLTIP
+          title: `Duração: ${duracao}`
+        };
+      });
+
       const gruposUnicos = [...new Set(dadosValidos.map(e => normalizarTexto(e.categoria)))];
 
       const groups = gruposUnicos.map(cat => ({
@@ -80,7 +119,6 @@ function carregarTimeline() {
         content: cat
       }));
 
-      // 🔥 RANGE SEGURO
       const datasInicio = items.map(i => new Date(i.start)).filter(d => !isNaN(d));
       const datasFim = items.map(i => new Date(i.end || i.start)).filter(d => !isNaN(d));
 
@@ -168,7 +206,6 @@ document.getElementById("formEvento").addEventListener("submit", function(e) {
       };
 
       if (id) {
-        // 🔹 UPDATE
         fetch(`${API_URL}/id/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -180,7 +217,6 @@ document.getElementById("formEvento").addEventListener("submit", function(e) {
         });
 
       } else {
-        // 🔹 CREATE COM ID SEQUENCIAL
         const novoId = gerarNovoId(data);
 
         fetch(API_URL, {
