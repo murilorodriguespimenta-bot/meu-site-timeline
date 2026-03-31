@@ -1,147 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Minha Timeline</title>
-
-  <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
-  <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
-
-  <style>
-    body { font-family: Arial; margin: 20px; }
-
-    #timeline {
-      height: 500px;
-      border: 1px solid #ccc;
-      margin-top: 20px;
-    }
-
-    button { padding: 6px 10px; margin: 5px; }
-
-    #modal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5);
-    }
-
-    #modalContent {
-      background: white;
-      padding: 20px;
-      width: 320px;
-      margin: 80px auto;
-      border-radius: 8px;
-      position: relative;
-    }
-
-    #closeBtn {
-      position: absolute;
-      top: 5px;
-      right: 10px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-
-    input, textarea {
-      width: 100%;
-      margin: 5px 0;
-      padding: 5px;
-    }
-  </style>
-</head>
-
-<body>
-
-<h2>Minha Timeline</h2>
-
-<button onclick="abrirModalCriar()">Add Event</button>
-
-<div id="timeline"></div>
-
-<!-- MODAL -->
-<div id="modal">
-  <div id="modalContent">
-    <span id="closeBtn" onclick="fecharModal()">X</span>
-
-    <h3 id="modalTitle">Evento</h3>
-
-    <input type="hidden" id="editId">
-    <input type="text" id="titulo" placeholder="Nome do evento">
-    <input type="date" id="inicio">
-    <input type="date" id="fim">
-    <input type="text" id="categoria" placeholder="Categoria">
-
-    <!-- 🔥 COR -->
-    <label>Cor da categoria:</label>
-    <input type="color" id="cor">
-
-    <textarea id="notas" maxlength="500" placeholder="Notas"></textarea>
-
-    <div id="botoes"></div>
-  </div>
-</div>
-
 <script>
-const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
-
-let timeline;
-
-// 🎨 GERAR COR AUTOMÁTICA
-function gerarCor() {
-  return '#' + Math.floor(Math.random()*16777215).toString(16);
-}
-
-// 🧠 MAPA DE CORES POR CATEGORIA
-function mapearCores(data) {
-  const mapa = {};
-
-  data.forEach(e => {
-    const cat = (e.categoria || "").trim();
-
-    if (!mapa[cat]) {
-      mapa[cat] = e.cor || gerarCor();
-    }
-  });
-
-  return mapa;
-}
-
-// ===== MODAL =====
-function abrirModalCriar() {
-  document.getElementById("modal").style.display = "block";
-  document.getElementById("modalTitle").innerText = "Novo Evento";
-
-  limparForm();
-
-  document.getElementById("botoes").innerHTML = `
-    <button onclick="salvarEvento()">Salvar</button>
-  `;
-}
-
-function abrirModalEditar(evento) {
-  document.getElementById("modal").style.display = "block";
-
-  document.getElementById("editId").value = evento.id;
-  document.getElementById("titulo").value = evento.titulo;
-  document.getElementById("inicio").value = evento.inicio;
-  document.getElementById("fim").value = evento.fim;
-  document.getElementById("categoria").value = evento.categoria;
-  document.getElementById("notas").value = evento.notas || "";
-
-  // 🔥 CARREGA COR
-  document.getElementById("cor").value = evento.cor || "#cccccc";
-
-  document.getElementById("botoes").innerHTML = `
-    <button onclick="atualizarEvento()">Atualizar</button>
-    <button onclick="deletarEvento()">Deletar</button>
-  `;
-}
-
-function fecharModal() {
-  document.getElementById("modal").style.display = "none";
-}
-
-// ===== TIMELINE =====
 function carregarTimeline() {
   fetch(API_URL)
     .then(res => res.json())
@@ -159,7 +16,6 @@ function carregarTimeline() {
           end: e.fim || null,
           group: e.categoria,
           subgroup: e.id,
-
           style: `background-color:${cor}; border-color:${cor};`
         };
       });
@@ -177,8 +33,14 @@ function carregarTimeline() {
         items,
         groups,
         {
+          orientation: 'top', // ✅ CORREÇÃO AQUI
           stack: true,
-          stackSubgroups: true
+          stackSubgroups: true,
+
+          format: {
+            majorLabels: { year: 'YYYY' },
+            minorLabels: { month: 'MMM' }
+          }
         }
       );
 
@@ -191,81 +53,4 @@ function carregarTimeline() {
 
     });
 }
-
-// ===== CRUD =====
-function gerarNovoId(data) {
-  return Math.max(...data.map(e => Number(e.id))) + 1;
-}
-
-function salvarEvento() {
-  fetch(API_URL)
-    .then(res => res.json())
-    .then(data => {
-
-      fetch(API_URL, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          data: [{
-            id: gerarNovoId(data),
-            titulo: titulo.value,
-            inicio: inicio.value,
-            fim: fim.value,
-            categoria: categoria.value,
-            notas: notas.value,
-            cor: cor.value
-          }]
-        })
-      }).then(() => {
-        fecharModal();
-        carregarTimeline();
-      });
-    });
-}
-
-function atualizarEvento() {
-  const id = editId.value;
-
-  fetch(`${API_URL}/id/${id}`, {
-    method: "PUT",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      data: {
-        titulo: titulo.value,
-        inicio: inicio.value,
-        fim: fim.value,
-        categoria: categoria.value,
-        notas: notas.value,
-        cor: cor.value
-      }
-    })
-  }).then(() => {
-    fecharModal();
-    carregarTimeline();
-  });
-}
-
-function deletarEvento() {
-  fetch(`${API_URL}/id/${editId.value}`, { method: "DELETE" })
-    .then(() => {
-      fecharModal();
-      carregarTimeline();
-    });
-}
-
-function limparForm() {
-  editId.value = "";
-  titulo.value = "";
-  inicio.value = "";
-  fim.value = "";
-  categoria.value = "";
-  notas.value = "";
-  cor.value = "#cccccc";
-}
-
-// INIT
-carregarTimeline();
 </script>
-
-</body>
-</html>
