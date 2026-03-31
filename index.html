@@ -17,7 +17,6 @@
 
     button { padding: 6px 10px; margin: 5px; }
 
-    /* MODAL */
     #modal {
       display: none;
       position: fixed;
@@ -48,11 +47,6 @@
       margin: 5px 0;
       padding: 5px;
     }
-
-    textarea {
-      resize: none;
-      height: 80px;
-    }
   </style>
 </head>
 
@@ -69,18 +63,18 @@
   <div id="modalContent">
     <span id="closeBtn" onclick="fecharModal()">X</span>
 
-    <h3 id="modalTitle">Evento</h3>
+    <h3 id="modalTitle">Editar</h3>
 
     <input type="hidden" id="editId">
     <input type="text" id="titulo" placeholder="Nome do evento">
     <input type="date" id="inicio">
     <input type="date" id="fim">
-    <input type="text" id="categoria" placeholder="Categoria">
+    <input type="text" id="categoria">
 
-    <label>Cor da categoria:</label>
+    <label>Cor:</label>
     <input type="color" id="cor">
 
-    <textarea id="notas" maxlength="500" placeholder="Notas (até 500 caracteres)"></textarea>
+    <textarea id="notas" maxlength="500"></textarea>
 
     <div id="botoes"></div>
   </div>
@@ -88,228 +82,212 @@
 
 <script>
 const API_URL = "https://sheetdb.io/api/v1/lgoh46p9jt5uf";
-
 let timeline;
 
 // ===== UTIL =====
-function gerarCor() {
-  return '#' + Math.floor(Math.random()*16777215).toString(16);
-}
-
-function normalizarTexto(txt) {
-  return (txt || "").trim();
-}
-
-function formatarData(data) {
-  if (!data) return "";
-  const d = new Date(data);
-  if (isNaN(d)) return "";
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-function formatarDataBR(data) {
-  if (!data) return "—";
-  const d = new Date(data);
-  if (isNaN(d)) return "—";
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-}
-
-function calcularDuracao(inicio, fim) {
-  const start = new Date(inicio);
-  const end = fim ? new Date(fim) : new Date(inicio);
-
-  if (isNaN(start) || isNaN(end)) return "";
-
-  let anos = end.getFullYear() - start.getFullYear();
-  let meses = end.getMonth() - start.getMonth();
-  let dias = end.getDate() - start.getDate();
-
-  if (dias < 0) { meses--; dias += 30; }
-  if (meses < 0) { anos--; meses += 12; }
-
-  let partes = [];
-  if (anos > 0) partes.push(`${anos} ano${anos>1?'s':''}`);
-  if (meses > 0) partes.push(`${meses} mês${meses>1?'es':''}`);
-  if (dias > 0) partes.push(`${dias} dia${dias>1?'s':''}`);
-
-  return partes.length ? partes.join(", ") : "Mesmo dia";
-}
-
-// ===== MAPA DE CORES =====
-function mapearCores(data) {
-  const mapa = {};
-  data.forEach(e => {
-    const cat = normalizarTexto(e.categoria);
-    if (!mapa[cat]) {
-      mapa[cat] = e.cor || gerarCor();
-    }
-  });
-  return mapa;
-}
+function normalizar(txt){ return (txt||"").trim(); }
+function gerarCor(){ return '#' + Math.floor(Math.random()*16777215).toString(16); }
 
 // ===== MODAL =====
-function abrirModalCriar() {
-  document.getElementById("modal").style.display = "block";
-  document.getElementById("modalTitle").innerText = "Novo Evento";
+function abrirModalCriar(){
+  modal.style.display="block";
+  modalTitle.innerText="Novo Evento";
   limparForm();
 
-  document.getElementById("botoes").innerHTML = `
-    <button onclick="salvarEvento()">Salvar</button>
-  `;
+  botoes.innerHTML=`<button onclick="salvarEvento()">Salvar</button>`;
 }
 
-function abrirModalEditar(evento) {
-  document.getElementById("modal").style.display = "block";
+function abrirModalEditarEvento(e){
+  modal.style.display="block";
+  modalTitle.innerText="Editar Evento";
 
-  editId.value = evento.id;
-  titulo.value = evento.titulo;
-  inicio.value = formatarData(evento.inicio);
-  fim.value = formatarData(evento.fim);
-  categoria.value = evento.categoria;
-  notas.value = evento.notas || "";
-  cor.value = evento.cor || "#cccccc";
+  editId.value=e.id;
+  titulo.value=e.titulo;
+  inicio.value=e.inicio;
+  fim.value=e.fim;
+  categoria.value=e.categoria;
+  notas.value=e.notas||"";
+  cor.value=e.cor||"#cccccc";
 
-  document.getElementById("botoes").innerHTML = `
+  botoes.innerHTML=`
     <button onclick="atualizarEvento()">Atualizar</button>
     <button onclick="deletarEvento()">Deletar</button>
   `;
 }
 
-function fecharModal() {
-  document.getElementById("modal").style.display = "none";
+// 🔥 NOVO MODAL CATEGORIA
+function abrirModalCategoria(cat, corAtual){
+  modal.style.display="block";
+  modalTitle.innerText="Editar Categoria";
+
+  editId.value=""; // não é evento
+  titulo.value="";
+  inicio.value="";
+  fim.value="";
+  notas.value="";
+
+  categoria.value=cat;
+  cor.value=corAtual || "#cccccc";
+
+  botoes.innerHTML=`
+    <button onclick="atualizarCategoria('${cat}')">Atualizar</button>
+  `;
 }
+
+function fecharModal(){ modal.style.display="none"; }
 
 // ===== TIMELINE =====
-function carregarTimeline() {
+function carregarTimeline(){
   fetch(API_URL)
-    .then(res => res.json())
-    .then(data => {
+  .then(r=>r.json())
+  .then(data=>{
 
-      const mapaCores = mapearCores(data);
-
-      const items = data.map(e => {
-        const cat = normalizarTexto(e.categoria);
-        const corItem = mapaCores[cat];
-
-        return {
-          id: Number(e.id),
-          content: "",
-          start: e.inicio,
-          end: e.fim || null,
-          group: cat,
-          subgroup: e.id,
-          style: `background-color:${corItem}; border-color:${corItem};`,
-          title: `
-<strong>${e.titulo}</strong><br>
-Início: ${formatarDataBR(e.inicio)}<br>
-Fim: ${formatarDataBR(e.fim)}<br>
-Duração: ${calcularDuracao(e.inicio, e.fim)}
-${e.notas ? `<br><em>${e.notas.substring(0,100)}...</em>` : ""}
-          `
-        };
-      });
-
-      const groups = [...new Set(data.map(e => normalizarTexto(e.categoria)))]
-        .map(cat => ({ id: cat, content: cat }));
-
-      if (timeline) timeline.destroy();
-
-      timeline = new vis.Timeline(
-        document.getElementById('timeline'),
-        items,
-        groups,
-        {
-          orientation: 'top', // ✅ DATAS EM CIMA
-          stack: true,
-          stackSubgroups: true,
-
-          format: {
-            majorLabels: { year: 'YYYY' },
-            minorLabels: { month: 'MMM' }
-          },
-
-          zoomMin: 1000 * 60 * 60 * 24 * 30,
-          zoomMax: 1000 * 60 * 60 * 24 * 365 * 500
-        }
-      );
-
-      timeline.on('select', function (props) {
-        if (props.items.length > 0) {
-          const evento = data.find(e => Number(e.id) === props.items[0]);
-          abrirModalEditar(evento);
-        }
-      });
-
+    const mapa={};
+    data.forEach(e=>{
+      const cat=normalizar(e.categoria);
+      if(!mapa[cat]) mapa[cat]=e.cor||gerarCor();
     });
-}
 
-// ===== CRUD =====
-function gerarNovoId(data) {
-  return Math.max(...data.map(e => Number(e.id))) + 1;
-}
-
-function salvarEvento() {
-  fetch(API_URL)
-    .then(res => res.json())
-    .then(data => {
-
-      fetch(API_URL, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          data: [{
-            id: gerarNovoId(data),
-            titulo: titulo.value,
-            inicio: inicio.value,
-            fim: fim.value,
-            categoria: normalizarTexto(categoria.value),
-            notas: notas.value,
-            cor: cor.value
-          }]
-        })
-      }).then(() => {
-        fecharModal();
-        carregarTimeline();
-      });
+    const items=data.map(e=>{
+      const cat=normalizar(e.categoria);
+      return{
+        id:Number(e.id),
+        content:"",
+        start:e.inicio,
+        end:e.fim||null,
+        group:cat,
+        subgroup:e.id,
+        style:`background:${mapa[cat]};border-color:${mapa[cat]}`
+      };
     });
-}
 
-function atualizarEvento() {
-  fetch(`${API_URL}/id/${editId.value}`, {
-    method: "PUT",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      data: {
-        titulo: titulo.value,
-        inicio: inicio.value,
-        fim: fim.value,
-        categoria: normalizarTexto(categoria.value),
-        notas: notas.value,
-        cor: cor.value
+    const groups=[...new Set(data.map(e=>normalizar(e.categoria)))]
+      .map(cat=>({
+        id:cat,
+        content:cat
+      }));
+
+    if(timeline) timeline.destroy();
+
+    timeline=new vis.Timeline(
+      document.getElementById('timeline'),
+      items,
+      groups,
+      {
+        orientation:'top',
+        stack:true,
+        stackSubgroups:true
       }
-    })
-  }).then(() => {
-    fecharModal();
-    carregarTimeline();
+    );
+
+    // 🔥 CLICK EVENTO
+    timeline.on('select', props=>{
+      if(props.items.length){
+        const ev=data.find(e=>Number(e.id)===props.items[0]);
+        abrirModalEditarEvento(ev);
+      }
+    });
+
+    // 🔥 CLICK CATEGORIA
+    timeline.on('click', function (props) {
+      if (props.what === 'group-label') {
+        const cat = props.group;
+        const corAtual = mapa[cat];
+        abrirModalCategoria(cat, corAtual);
+      }
+    });
+
   });
 }
 
-function deletarEvento() {
-  fetch(`${API_URL}/id/${editId.value}`, { method: "DELETE" })
-    .then(() => {
+// ===== CRUD EVENTO =====
+function gerarNovoId(data){
+  return Math.max(...data.map(e=>Number(e.id)))+1;
+}
+
+function salvarEvento(){
+  fetch(API_URL).then(r=>r.json()).then(data=>{
+    fetch(API_URL,{
+      method:"POST",
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        data:[{
+          id:gerarNovoId(data),
+          titulo:titulo.value,
+          inicio:inicio.value,
+          fim:fim.value,
+          categoria:categoria.value,
+          notas:notas.value,
+          cor:cor.value
+        }]
+      })
+    }).then(()=>{fecharModal();carregarTimeline();});
+  });
+}
+
+function atualizarEvento(){
+  fetch(`${API_URL}/id/${editId.value}`,{
+    method:"PUT",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      data:{
+        titulo:titulo.value,
+        inicio:inicio.value,
+        fim:fim.value,
+        categoria:categoria.value,
+        notas:notas.value,
+        cor:cor.value
+      }
+    })
+  }).then(()=>{fecharModal();carregarTimeline();});
+}
+
+function deletarEvento(){
+  fetch(`${API_URL}/id/${editId.value}`,{method:"DELETE"})
+  .then(()=>{fecharModal();carregarTimeline();});
+}
+
+// ===== 🔥 ATUALIZAR CATEGORIA =====
+function atualizarCategoria(catAntiga){
+  fetch(API_URL)
+  .then(r=>r.json())
+  .then(data=>{
+
+    const novaCat = categoria.value;
+    const novaCor = cor.value;
+
+    const updates = data
+      .filter(e => normalizar(e.categoria) === normalizar(catAntiga))
+      .map(e => {
+        return fetch(`${API_URL}/id/${e.id}`, {
+          method: "PUT",
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            data: {
+              categoria: novaCat,
+              cor: novaCor
+            }
+          })
+        });
+      });
+
+    Promise.all(updates).then(()=>{
       fecharModal();
       carregarTimeline();
     });
+
+  });
 }
 
-function limparForm() {
-  editId.value = "";
-  titulo.value = "";
-  inicio.value = "";
-  fim.value = "";
-  categoria.value = "";
-  notas.value = "";
-  cor.value = "#cccccc";
+// ===== UTIL =====
+function limparForm(){
+  editId.value="";
+  titulo.value="";
+  inicio.value="";
+  fim.value="";
+  categoria.value="";
+  notas.value="";
+  cor.value="#cccccc";
 }
 
 // INIT
