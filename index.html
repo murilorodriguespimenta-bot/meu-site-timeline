@@ -1,307 +1,60 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Minha Timeline</title>
+const items = data.map(e => {
 
-  <script src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
-  <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
+  const cat = (e.categoria || "").trim();
+  const cor = mapa[cat] || "#999";
 
-  <style>
-    body { font-family: Arial; margin: 20px; }
+  const titulo = e.titulo || "Sem título";
+  const inicio = e.inicio || "";
+  const fim = e.fim || "";
+  const notas = e.notas || "";
 
-    #timeline {
-      height: 500px;
-      border: 1px solid #ccc;
-      margin-top: 20px;
-    }
+  // 🔥 FORMATA DATA SEGURA
+  function formatarDataBR(data){
+    if(!data) return "—";
+    const d = new Date(data);
+    if(isNaN(d)) return "—";
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  }
 
-    #modal {
-      display: none;
-      position: fixed;
-      top:0;left:0;width:100%;height:100%;
-      background: rgba(0,0,0,0.5);
-    }
+  // 🔥 CALCULAR DURAÇÃO
+  function calcularDuracao(inicio, fim){
+    const start = new Date(inicio);
+    const end = fim ? new Date(fim) : new Date(inicio);
 
-    #modalContent {
-      background:white;
-      padding:20px;
-      width:320px;
-      margin:80px auto;
-      border-radius:8px;
-      position:relative;
-    }
+    if (isNaN(start) || isNaN(end)) return "—";
 
-    #closeBtn {
-      position:absolute;
-      top:5px;
-      right:10px;
-      cursor:pointer;
-    }
+    let anos = end.getFullYear() - start.getFullYear();
+    let meses = end.getMonth() - start.getMonth();
+    let dias = end.getDate() - start.getDate();
 
-    input, textarea {
-      width:100%;
-      margin:5px 0;
-      padding:5px;
-    }
-  </style>
-</head>
+    if (dias < 0) { meses--; dias += 30; }
+    if (meses < 0) { anos--; meses += 12; }
 
-<body>
+    let partes = [];
+    if (anos > 0) partes.push(`${anos} ano${anos>1?'s':''}`);
+    if (meses > 0) partes.push(`${meses} mês${meses>1?'es':''}`);
+    if (dias > 0) partes.push(`${dias} dia${dias>1?'s':''}`);
 
-<h2>Minha Timeline</h2>
-<button onclick="abrirModalCriar()">Add Event</button>
+    return partes.length ? partes.join(", ") : "Mesmo dia";
+  }
 
-<div id="timeline"></div>
+  return {
+    id: Number(e.id),
+    content: "",
+    start: inicio,
+    end: fim || null,
+    group: cat,
 
-<div id="modal">
-  <div id="modalContent">
-    <span id="closeBtn" onclick="fecharModal()">X</span>
+    style: `background:${cor};border-color:${cor}`,
 
-    <h3 id="modalTitle"></h3>
+    // 🔥 TOOLTIP GARANTIDO
+    title: `
+<strong>${titulo}</strong><br>
+Início: ${formatarDataBR(inicio)}<br>
+Fim: ${formatarDataBR(fim)}<br>
+Duração: ${calcularDuracao(inicio, fim)}
+${notas ? `<br><em>${notas.substring(0,150)}</em>` : ""}
+    `
+  };
 
-    <input type="hidden" id="editId">
-
-    <!-- EVENTO -->
-    <div id="camposEvento">
-      <input id="titulo" placeholder="Nome do evento">
-      <input type="date" id="inicio">
-      <input type="date" id="fim">
-      <textarea id="notas" maxlength="500" placeholder="Notas"></textarea>
-      <input id="categoria" placeholder="Categoria">
-    </div>
-
-    <!-- CATEGORIA -->
-    <div id="camposCategoria">
-      <input id="categoriaEdit" placeholder="Nome da categoria">
-      <input type="color" id="cor">
-    </div>
-
-    <div id="botoes"></div>
-  </div>
-</div>
-
-<script>
-const API_URL="https://sheetdb.io/api/v1/lgoh46p9jt5uf";
-let timeline;
-
-// ===== MODOS =====
-function modoEvento(){
-  camposEvento.style.display="block";
-  camposCategoria.style.display="none";
-}
-
-function modoCategoria(){
-  camposEvento.style.display="none";
-  camposCategoria.style.display="block";
-}
-
-// ===== MODAIS =====
-function abrirModalCriar(){
-  modal.style.display="block";
-  modalTitle.innerText="Novo Evento";
-  modoEvento();
-  limparForm();
-
-  botoes.innerHTML=`<button onclick="salvarEvento()">Salvar</button>`;
-}
-
-function abrirModalEditarEvento(e){
-  modal.style.display="block";
-  modalTitle.innerText="Editar Evento";
-  modoEvento();
-
-  editId.value=e.id;
-  titulo.value=e.titulo;
-  inicio.value=e.inicio;
-  fim.value=e.fim;
-  notas.value=e.notas||"";
-  categoria.value=e.categoria;
-
-  botoes.innerHTML=`
-    <button onclick="atualizarEvento()">Atualizar</button>
-    <button onclick="deletarEvento()">Deletar</button>
-  `;
-}
-
-function abrirModalCategoria(cat, corAtual){
-  modal.style.display="block";
-  modalTitle.innerText="Editar Categoria";
-  modoCategoria();
-
-  categoriaEdit.value=cat;
-  cor.value=corAtual || "#999999";
-
-  botoes.innerHTML=`
-    <button onclick="atualizarCategoria('${cat}')">Atualizar</button>
-  `;
-}
-
-function fecharModal(){ modal.style.display="none"; }
-
-// ===== CORES (FONTE ÚNICA) =====
-function obterMapaCores(data){
-  const mapa = {};
-
-  data.forEach(e => {
-    const cat = (e.categoria || "").trim();
-
-    if (e.cor) {
-      mapa[cat] = e.cor; // 🔥 sempre sobrescreve → última cor vence
-    }
-  });
-
-  return mapa;
-}
-
-// ===== TIMELINE =====
-function carregarTimeline(){
-  fetch(API_URL)
-  .then(r=>r.json())
-  .then(data=>{
-
-    const mapa = obterMapaCores(data);
-
-    const items = data.map(e=>{
-      const cat = (e.categoria||"").trim();
-      const cor = mapa[cat] || "#999";
-
-      return{
-        id:Number(e.id),
-        content:"",
-        start:e.inicio,
-        end:e.fim||null,
-        group:cat,
-        style:`background:${cor};border-color:${cor}`
-      };
-    });
-
-    const groups=[...new Set(data.map(e=>e.categoria))]
-      .map(cat=>({id:cat,content:cat}));
-
-    if(timeline) timeline.destroy();
-
-    timeline=new vis.Timeline(
-      document.getElementById("timeline"),
-      items,
-      groups,
-      {
-        orientation:'top',
-        stack:true,
-        stackSubgroups:true,
-
-        format:{
-          majorLabels:{year:'YYYY'},
-          minorLabels:{month:'MMM'}
-        }
-      }
-    );
-
-    // CLICK EVENTO
-    timeline.on('select',props=>{
-      if(props.items.length){
-        const ev=data.find(e=>Number(e.id)===props.items[0]);
-        abrirModalEditarEvento(ev);
-      }
-    });
-
-    // CLICK CATEGORIA
-    timeline.on('click',props=>{
-      if(props.what==="group-label"){
-        const cat=props.group;
-        const corAtual = mapa[cat];
-        abrirModalCategoria(cat, corAtual);
-      }
-    });
-
-  });
-}
-
-// ===== CRUD EVENTO =====
-function gerarNovoId(data){
-  return Math.max(...data.map(e=>Number(e.id)))+1;
-}
-
-function salvarEvento(){
-  fetch(API_URL).then(r=>r.json()).then(data=>{
-    fetch(API_URL,{
-      method:"POST",
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        data:[{
-          id:gerarNovoId(data),
-          titulo:titulo.value,
-          inicio:inicio.value,
-          fim:fim.value,
-          categoria:categoria.value,
-          notas:notas.value
-        }]
-      })
-    }).then(()=>{fecharModal();carregarTimeline();});
-  });
-}
-
-function atualizarEvento(){
-  fetch(`${API_URL}/id/${editId.value}`,{
-    method:"PUT",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      data:{
-        titulo:titulo.value,
-        inicio:inicio.value,
-        fim:fim.value,
-        categoria:categoria.value,
-        notas:notas.value
-      }
-    })
-  }).then(()=>{fecharModal();carregarTimeline();});
-}
-
-function deletarEvento(){
-  fetch(`${API_URL}/id/${editId.value}`,{method:"DELETE"})
-  .then(()=>{fecharModal();carregarTimeline();});
-}
-
-// ===== ATUALIZAR CATEGORIA =====
-function atualizarCategoria(catAntiga){
-  fetch(API_URL)
-  .then(r=>r.json())
-  .then(data=>{
-
-    const novaCat = categoriaEdit.value;
-    const novaCor = cor.value;
-
-    const updates = data
-      .filter(e => (e.categoria||"").trim() === catAntiga)
-      .map(e => fetch(`${API_URL}/id/${e.id}`,{
-        method:"PUT",
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          data:{
-            categoria:novaCat,
-            cor:novaCor
-          }
-        })
-      }));
-
-    Promise.all(updates).then(()=>{
-      fecharModal();
-      carregarTimeline();
-    });
-  });
-}
-
-// ===== UTIL =====
-function limparForm(){
-  editId.value="";
-  titulo.value="";
-  inicio.value="";
-  fim.value="";
-  notas.value="";
-  categoria.value="";
-}
-
-carregarTimeline();
-</script>
-
-</body>
-</html>
+});
